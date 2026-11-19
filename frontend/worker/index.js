@@ -146,8 +146,16 @@ registerFeedspaceAdminRoutes(app, buildSnapshot);
 
 async function timeline(c, cat) {
   const page = pageParam(c);
-  const stats = await getMeta(c.env.DB, 'stats');
-  if (!page || (cat && !categoryName(cat, stats?.sourceGroups))) return notFound(c, stats);
+  let stats = await getMeta(c.env.DB, 'stats');
+  // Fresh installations have source_groups in D1 before the first crawl builds
+  // the stats snapshot. Categories must still render immediately after migration.
+  if (!stats?.sourceGroups) {
+    const { results: sourceGroups } = await c.env.DB.prepare(
+      'SELECT id, name FROM source_groups ORDER BY sort_order, id',
+    ).all();
+    stats = { blogs: 0, weekBlogs: 0, dayPosts: 0, ...stats, sourceGroups };
+  }
+  if (!page || (cat && !categoryName(cat, stats.sourceGroups))) return notFound(c, stats);
   if (c.req.param('n') === '1') return c.redirect(cat ? `/c/${cat}` : '/latest', 301);
   const rows = await latestPosts(c.env.DB, {
     cat, userId: c.get('user')?.id, limit: TIMELINE_PAGE_SIZE + 1, offset: (page - 1) * TIMELINE_PAGE_SIZE,
