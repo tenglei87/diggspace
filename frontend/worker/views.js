@@ -4,9 +4,9 @@
 import { html, raw } from 'hono/html';
 import { CATEGORIES } from './categories.js';
 
-export const SITE_NAME = 'Indi';
+export const SITE_NAME = 'DiggSpace';
 // What Indi is, for titles and descriptions that need the Chinese keywords
-export const SITE_TAGLINE = '中文独立博客';
+export const SITE_TAGLINE = '博客、论坛与资讯聚合';
 const TZ = 'Asia/Shanghai';
 const DAY = 86400;
 
@@ -125,14 +125,14 @@ const NAV = [
 ];
 
 // Shown when "每小时抓取一次 RSS" is clicked; keep in sync with nextCheckIn in crawl.js
-const CRAWL_DETAILS = '30 天内有更新的博客每小时检查一次，一年内有更新的每 3 小时，更久没更新的每 12 小时。抓取失败时会先照常重试，失败超过一天后逐步降低频率（12 小时、3 天、7 天）；连续 7 天抓不到标记为疑似失效，超过 90 天标记为已失效、每 90 天才检查一次。恢复后自动回到正常节奏。RSS 没有变化时只发一个很小的请求，不会重复下载。';
+const CRAWL_DETAILS = '30 天内有更新的订阅源每小时检查一次，一年内有更新的每 3 小时，更久没更新的每 12 小时。抓取失败时会先照常重试，失败超过一天后逐步降低频率（12 小时、3 天、7 天）；连续 7 天抓不到标记为疑似失效，超过 90 天标记为已失效、每 90 天才检查一次。恢复后自动回到正常节奏。RSS 没有变化时只发一个很小的请求，不会重复下载。';
 
 // GitHub-style "Star | 12.3k" button, drawn here instead of loading a badge
 // image from a third-party service (slow from mainland China)
 const GITHUB_MARK = 'M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z';
 function githubBadge(stars) {
   const count = stars == null ? '' : stars >= 1000 ? `${(stars / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(stars);
-  return html`<a class="gh-badge" href="https://github.com/timqian/chinese-independent-blogs" target="_blank" rel="noopener" title="在 GitHub 上给这个项目点 Star">
+  return html`<a class="gh-badge" href="https://github.com/tenglei87/diggspace" target="_blank" rel="noopener" title="在 GitHub 上给这个项目点 Star">
     <span class="gh-star"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="${GITHUB_MARK}"/></svg>Star</span>${count ? html`<span class="gh-count">${count}</span>` : ''}
   </a>`;
 }
@@ -195,7 +195,7 @@ ${jsonLd.map(jsonLdScript)}
       ${categoryLinks(cat, 'side-cats', stats?.sourceGroups)}
       <p class="side-links"><a href="/random" rel="nofollow">随机逛一个博客 →</a></p>
       ${githubBadge(stats?.stars)}
-      <div class="about">${SITE_NAME} 收录中文独立博客，<details class="hint"><summary>每小时检查一次 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>欢迎在 GitHub 上<a href="https://github.com/timqian/chinese-independent-blogs">提交你的博客</a>。</div>
+      <div class="about">${SITE_NAME} 汇聚独立博客、论坛及资讯网站的 RSS 更新，<details class="hint"><summary>定时检查 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>订阅源由本站独立维护。</div>
     </aside>
   </div>
 </div>
@@ -386,7 +386,7 @@ export function directoryPage({ site, stats, user, following, blogs, view, now }
   return layout({
     site, stats, user, path,
     title: view === 'all' ? `博客列表 · ${SITE_NAME}` : `博客列表：${label} · ${SITE_NAME}`,
-    description: `${blogs.length} 个中文独立博客，按最近更新排序，附每月发文数量。`,
+    description: `${blogs.length} 个订阅源，按最近更新排序，附每月发文数量。`,
     nav: null,
     noindex: view === 'dead',
     jsonLd: [breadcrumbs(site, [[SITE_NAME, '/'], ['博客列表', '/blogs']])],
@@ -403,7 +403,7 @@ export function directoryPage({ site, stats, user, following, blogs, view, now }
         ${(stats?.sourceGroups ?? [{ id: 'blogs', name: '独立博客' }]).map(({ id, name }) => html`<button data-cat="sg-${id}" aria-pressed="false">${name}</button>`)}
       </div>
       <div class="result-count" id="result-count">共 ${blogs.length} 个博客</div>
-      ${view === 'dead' ? html`<p class="list-note">以下博客的 RSS 目前抓取失败，最近失败的在前。连续失败 7 天（RSS 不存在、域名失效等明确错误为 1 天）标记为疑似失效，90 天为已失效。如果你知道正确的 RSS 地址，欢迎<a href="https://github.com/timqian/chinese-independent-blogs/edit/master/blogs-original.csv" target="_blank" rel="noopener">在 GitHub 上修改</a>，合并后一小时内会重新抓取。</p>` : ''}
+      ${view === 'dead' ? html`<p class="list-note">以下博客的 RSS 目前抓取失败，最近失败的在前。连续失败 7 天（RSS 不存在、域名失效等明确错误为 1 天）标记为疑似失效，90 天为已失效。如发现订阅地址有误，请联系本站管理员更新，下一次抓取时生效。</p>` : ''}
       <ul class="blogs" id="bloglist">${blogs.map((b) => blogRow(b, now, following, path, { showFailure: view === 'dead' }))}</ul>`,
   });
 }
