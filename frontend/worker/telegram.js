@@ -20,7 +20,7 @@ function clip(text, max) {
   return out;
 }
 
-export const telegramEnabled = (env) => Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
+export const telegramEnabled = (env) => Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID && env.SITE_URL);
 
 async function send(env, text) {
   const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -37,7 +37,7 @@ async function send(env, text) {
 // `blogs`: [{ num, name, url }] that were just added to the list
 export async function announceNewBlogs(env, blogs) {
   if (!telegramEnabled(env) || !blogs.length) return;
-  const site = env.SITE_URL || 'https://indi.blog';
+  const site = env.SITE_URL;
   const shown = blogs.slice(0, MAX_NEW_BLOGS);
   const lines = shown.map((b) => `• <a href="${esc(site)}/b/${b.num}">${esc(b.name)}</a> · ${esc(b.url)}`);
   if (blogs.length > shown.length) lines.push(`…以及另外 ${blogs.length - shown.length} 个`);
@@ -57,7 +57,7 @@ export async function announceWeeklyTop(env, now = Math.floor(Date.now() / 1000)
     WHERE v.created_at > ? AND b.removed = 0
     GROUP BY p.id ORDER BY votes DESC, p.published_at DESC LIMIT 10`).bind(now - WEEK).all();
   if (!results.length) return { sent: false, reason: 'no votes' };
-  const site = env.SITE_URL || 'https://indi.blog';
+  const site = env.SITE_URL;
   const lines = results.map((r, i) => `${i + 1}. <a href="${esc(site)}/p/${r.id}">${esc(clip(r.title, TITLE_WIDTH))}</a> ▲${r.votes}`);
   const msg = await send(env, `🔥 本周获赞最多的 ${results.length} 篇文章\n${lines.join('\n')}`);
   return { sent: true, posts: results.length, messageId: msg?.message_id, chat: msg?.chat, thread: msg?.message_thread_id };
