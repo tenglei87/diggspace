@@ -63,6 +63,27 @@ python3 scripts/feedspace_admin.py add-source --name V2EX --url https://www.v2ex
 
 详细操作见 [FEEDSPACE.md](./FEEDSPACE.md) 和 [frontend/README.md](./frontend/README.md)。
 
+
+## 一键部署到自己的 Cloudflare（预览版）
+
+现在提供一个**只支持手动触发**的 GitHub Actions 工作流，可自动创建或复用你账号里的独立 D1，执行全部迁移，然后部署到自己的 workers.dev。首次部署为了控制资源消耗，**不启用定时抓取，也不会启用邮箱登录**；不接触旧站域名。
+
+在 GitHub 仓库 **Settings → Secrets and variables → Actions → Repository secrets** 新增以下三个值，**不要发送到聊天或提交到仓库文件中**：
+
+| Secret 名称 | 从哪里获得 |
+| --- | --- |
+| CLOUDFLARE_ACCOUNT_ID | Cloudflare Dashboard 的 Account ID |
+| CLOUDFLARE_API_TOKEN | 自建 API Token，仅授权目标账号需要的 Workers 部署与 D1 创建/查询/迁移权限 |
+| DIGGSPACE_ADMIN_TOKEN | 自己生成至少 32 位的随机管理员令牌，例如使用本地 Node.js 的 crypto.randomBytes(32).toString('hex') |
+
+然后打开仓库 [Actions](https://github.com/tenglei87/diggspace/actions) → **Deploy DiggSpace preview (manual)** → **Run workflow**，选择 `master`，在确认框填写 `DEPLOY_DIGGSPACE`。
+
+工作流会先核验 Secrets，随后创建/复用 `diggspace` D1、生成只针对本次运行的安全配置、迁移并部署 Worker，最后用真实 workers.dev URL 检查首页和管理员 API。GitHub Actions 的运行摘要会提供预览 URL。
+
+**重要安全限制：** 仓库内的 D1 ID 仍然是无效占位符，不会写入真实账号 ID。每次手动部署都会在 runner 内临时获得正确 ID。该工作流不会在 `push` 或 PR 时自动上线；预览版不自动抓取 1609 个 RSS，也不发送登录验证码。可在验证 Worker/D1 成功之后单独开启抓取，避免超出免费计划限制。
+
+详细配置参见 [FEEDSPACE.md](./FEEDSPACE.md)。
+
 ## 开源许可与版权
 
 这是一个独立维护的衍生项目，不是从零重写。原始软件采用 MIT License（© 2019 Tim Qian）。按许可要求，保留根目录的 [LICENSE](./LICENSE) 和相应版权声明；代码与运行服务已经分离，版权归属不会被抹除。
