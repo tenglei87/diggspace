@@ -145,9 +145,12 @@ async function sendLoginCode(env, email, code) {
   const subject = `${code} 是你的 ${SITE_NAME} 登录验证码`;
   const text = `你的登录验证码是 ${code}，10 分钟内有效。\n\n如果不是你本人操作，请忽略这封邮件。`;
   // Local development: print the code instead of sending mail
-  if (env.EMAIL_DEV_LOG === '1' || !env.EMAIL) {
+  if (env.EMAIL_DEV_LOG === '1') {
     console.log(`[login code] ${email}: ${code}`);
     return;
+  }
+  if (!env.EMAIL || !env.EMAIL_FROM) {
+    throw Object.assign(new Error('Email login is not configured'), { code: 'EMAIL_DISABLED' });
   }
   await env.EMAIL.send({
     to: email,
@@ -250,6 +253,13 @@ export function registerAuthRoutes(app) {
       ? c.json({ error }, 400)
       : c.html(loginPage({ site, next, github: Boolean(c.env.GITHUB_CLIENT_ID), email, error }), 400);
     if (!EMAIL_RE.test(email) || email.length > 254) return retry('请输入有效的邮箱地址。');
+    // Never issue or log a real user's one-time code when email delivery is disabled.
+    if (c.env.EMAIL_DEV_LOG !== '1' && (!c.env.EMAIL || !c.env.EMAIL_FROM)) {
+      return wantsJson
+        ? c.json({ error: '邮箱登录尚未启用。' }, 503)
+        : c.html(loginPage({ site, next, github: Boolean(c.env.GITHUB_CLIENT_ID), email,
+          error: '邮箱登录尚未启用。' }), 503);
+    }
 
     const db = c.env.DB;
     const t = now();
