@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import blogsCsv from '../../blogs-original.csv';
 import { originCheck, registerAuthRoutes, requireUser, sessionMiddleware } from './auth.js';
 import { buildSnapshot, crawlFavicons, crawlFeeds, repoStars, syncBlogs } from './crawl.js';
+import { registerFeedspaceAdminRoutes } from './feedspace-admin.js';
 import { announceNewBlogs, announceWeeklyTop, describeChat, telegramEnabled } from './telegram.js';
 import { hotPosts, registerDiscussRoutes, votedIds } from './discuss.js';
 import { blockedBlogsPage, blogFollowersPage, blogPage, categoryName, directoryPage, discussionsPage, errorPage, followingBlogsPage, followingOpml, followingPage, hotPage, notificationsPage, postPage, sitemap, timelinePage, userFollowingPage, userPage, userUpvotedPage } from './views.js';
@@ -35,7 +36,7 @@ async function getMeta(db, key) {
 
 // Snapshot blogs use short keys to keep the stored JSON small
 const fromSnapshot = (b) => ({
-  id: b.id, num: b.num, name: b.n, url: b.u, feed: b.f, tags: b.tags, categories: b.c,
+  id: b.id, num: b.num, name: b.n, url: b.u, feed: b.f, tags: b.tags, categories: b.c, sourceGroup: b.g || 'blogs',
   dead: b.dead, gone: b.gone, failingSince: b.fs, error: b.err, last: b.last, monthly: b.m, icon: b.i,
 });
 
@@ -52,12 +53,12 @@ async function latestPosts(db, { cat = '', limit, offset = 0, userId = null }) {
            b.id AS blog_id, b.num, b.name, b.icon_key
     FROM posts p JOIN blogs b ON b.id = p.blog_id
     WHERE b.removed = 0 AND b.dead_since IS NULL
-      AND (? = '' OR b.categories LIKE ?)
+      AND (? = '' OR b.source_group = ? OR b.categories LIKE ?)
       AND NOT EXISTS (
         SELECT 1 FROM blocked_blogs bb WHERE bb.user_id = ? AND bb.blog_id = b.id
       )
     ORDER BY p.published_at DESC LIMIT ? OFFSET ?`)
-    .bind(cat, `%"${cat}"%`, userId ?? -1, limit, offset).all();
+    .bind(cat, cat.startsWith('sg-') ? cat.slice(3) : null, `%"${cat}"%`, userId ?? -1, limit, offset).all();
   return results.map(toPost);
 }
 
@@ -139,13 +140,14 @@ app.use('*', async (c, next) => {
 app.use('*', sessionMiddleware);
 registerAuthRoutes(app);
 registerDiscussRoutes(app);
+registerFeedspaceAdminRoutes(app, buildSnapshot);
 
 // ---------- pages ----------
 
 async function timeline(c, cat) {
   const page = pageParam(c);
   const stats = await getMeta(c.env.DB, 'stats');
-  if (!page || (cat && !categoryName(cat))) return notFound(c, stats);
+  if (!page || (cat && !categoryName(cat, stats?.sourceGroups))) return notFound(c, stats);
   if (c.req.param('n') === '1') return c.redirect(cat ? `/c/${cat}` : '/latest', 301);
   const rows = await latestPosts(c.env.DB, {
     cat, userId: c.get('user')?.id, limit: TIMELINE_PAGE_SIZE + 1, offset: (page - 1) * TIMELINE_PAGE_SIZE,
