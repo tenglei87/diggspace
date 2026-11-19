@@ -1,4 +1,4 @@
-// Prepare a safe workers.dev preview without changing the checked-in config.
+// Prepare the independently-owned digg.space custom-domain release without changing checked-in config.
 // The workflow operates on an ephemeral GitHub Actions checkout only.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +13,7 @@ function replaceOnce(text, pattern, replacement, description) {
   return text.replace(pattern, replacement);
 }
 
-export function preparePreviewConfig(source, databaseId) {
+export function prepareCustomDomainConfig(source, databaseId) {
   if (!UUID.test(databaseId) || databaseId === PLACEHOLDER ||
       databaseId.toLowerCase() === 'b1261162-994b-429e-8447-3a3554a96e9c') {
     throw new Error('Refusing to use a placeholder or upstream D1 database');
@@ -50,18 +50,25 @@ export function preparePreviewConfig(source, databaseId) {
   );
   next = replaceOnce(next,
     /"name": "diggspace",/,
-    '"name": "diggspace",\n  "workers_dev": true,',
+    '"name": "diggspace",\n  "workers_dev": false,\n  "routes": [{ "pattern": "digg.space", "custom_domain": true }],',
     'Worker name',
   );
-  if (/"routes"\s*:/.test(next) || /indi\.blog|timqian|chinese-independent-blogs/i.test(next)) {
-    throw new Error('Upstream settings or custom domain detected after preview preparation');
+  next = replaceOnce(next,
+    /"SITE_URL"\s*:\s*""/,
+    '"SITE_URL": "https://digg.space"',
+    'canonical site URL',
+  );
+  if (!next.includes('"pattern": "digg.space", "custom_domain": true') ||
+      !next.includes('"SITE_URL": "https://digg.space"') ||
+      /indi\.blog|timqian|chinese-independent-blogs/i.test(next)) {
+    throw new Error('Invalid custom domain or upstream dependency');
   }
   return next;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const id = process.env.DIGGSPACE_D1_ID || '';
-  const preview = preparePreviewConfig(readFileSync(CONFIG, 'utf8'), id);
+  const preview = prepareCustomDomainConfig(readFileSync(CONFIG, 'utf8'), id);
   writeFileSync(CONFIG, preview);
-  console.log('Prepared independent workers.dev preview; RSS cron and email sending are disabled');
+  console.log('Prepared digg.space custom-domain deployment; RSS cron and email sending are disabled');
 }
