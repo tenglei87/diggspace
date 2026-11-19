@@ -1,6 +1,5 @@
 // FeedSpace: admin-only management of RSS/Atom sources and site groups.
 // No changes to the public layout, styles, or browser JavaScript.
-import { blogId } from '../../scripts/lib/feed.mjs';
 import { categorize } from './categories.js';
 
 const BASE = '/api/admin/feedspace';
@@ -10,6 +9,10 @@ const owns = (c) => !!c.env.ADMIN_TOKEN && c.req.header('Authorization') === 'Be
 const denied = (c) => c.json({ error: 'Not found' }, 404);
 const invalid = (c, why) => c.json({ error: why }, 400);
 const validId = (id) => typeof id === 'string' && GROUP_ID.test(id);
+async function sourceId(feed) {
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(feed)));
+  return 'manual-' + Array.from(bytes.slice(0, 20), (x) => x.toString(16).padStart(2, '0')).join('');
+}
 const validName = (name, max) => typeof name === 'string' && name.trim().length > 0 && name.trim().length <= max;
 const safeSort = (n) => Number.isSafeInteger(n) && Math.abs(n) <= 1000000;
 
@@ -17,7 +20,7 @@ function publicUrl(value) {
   if (typeof value !== 'string' || value.length < 8 || value.length > 2048) return null;
   try {
     const u = new URL(value.trim());
-    const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    const host = u.hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
     // This is an administrator-only tool, not an unrestricted public fetch API.
     // Reject literal IPs, local names, credentials and non-standard ports.
     // Do not open it to general users without DNS/redirect SSRF protection.
@@ -164,9 +167,9 @@ export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
     if (!await db.prepare('SELECT 1 FROM source_groups WHERE id = ?').bind(data.source_group).first()) {
       return invalid(c, 'Unknown groupId');
     }
-    const id = blogId(data.url);
-    if (await db.prepare('SELECT 1 FROM blogs WHERE id = ? OR url = ?').bind(id, data.url).first()) {
-      return c.json({ error: 'Source already exists' }, 409);
+    const id = await sourceId(data.feed);
+    if (await db.prepare('SELECT 1 FROM blogs WHERE id = ? OR feed = ?').bind(id, data.feed).first()) {
+      return c.json({ error: 'RSS feed already exists' }, 409);
     }
     const now = Math.floor(Date.now() / 1000);
     await db.prepare(
@@ -191,8 +194,8 @@ export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
     if (data.source_group && !await db.prepare('SELECT 1 FROM source_groups WHERE id = ?').bind(data.source_group).first()) {
       return invalid(c, 'Unknown groupId');
     }
-    if (data.url && await db.prepare('SELECT 1 FROM blogs WHERE url = ? AND num != ?').bind(data.url, num).first()) {
-      return c.json({ error: 'URL already registered' }, 409);
+    if (data.feed && await db.prepare('SELECT 1 FROM blogs WHERE feed = ? AND num != ?').bind(data.feed, num).first()) {
+      return c.json({ error: 'RSS feed already registered' }, 409);
     }
     const fields = Object.keys(data).map((col) => col + ' = ?');
     const args = Object.values(data);
