@@ -46,3 +46,9 @@ jobs:
         run: node frontend/scripts/test-feedspace.mjs
       - name: Test protected categories and RSS management endpoints
         run: node frontend/scripts/test-feedspace-admin.mjs
+      - name: Smoke-test local Wrangler Worker with real D1 SQL
+        run: |
+          printf 'ADMIN_TOKEN=ci-local-test-token\nCACHE_TTL=0\nEMAIL_DEV_LOG=1\nGITHUB_CLIENT_ID=\n' > frontend/.dev.vars
+          npm run db:migrate --prefix frontend
+          npm run dev:seed --prefix frontend
+          node frontend/scripts/test-worker-runtime.mjs
