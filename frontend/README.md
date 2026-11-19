@@ -1,108 +1,99 @@
-# Indi
+# DiggSpace Worker
 
-中文独立博客列表的网站，名字叫 Indi。一个 Cloudflare Worker 完成全部工作：
+Cloudflare Worker + Hono (SSR) + D1 实现的独立 RSS / Atom 聚合站。前端保留原网站结构、样式及基本交互；本站的数据采集、账户、密钥和部署独立运行。
 
-- `public/`：静态页面（原生 JS，无构建步骤）
-- `worker/`：API、favicon，以及每小时一次的定时抓取
-- `migrations/`：D1 数据库表结构
-- 博客名单：每次抓取时从 GitHub 拉取 master 上的 `blogs-original.csv`（`BLOGS_CSV_URL`），合并的 PR 一小时内生效，不用重新部署；拉取失败时用部署时打包的那份。RSS 解析逻辑和仓库根目录 `scripts/` 下的脚本共用 `../scripts/lib/feed.mjs`
+## 目录
 
-所有抓取到的文章都存进 D1，不会因为文章被挤出 RSS 而丢失。
+- `worker/index.js`：HTTP 路由、最新/热门/我的关注、定时抓取及 API
+- `worker/crawl.js`：D1 存储、定时队列、RSS 抓取、首页快照
+- `worker/feedspace-admin.js`：仅管理员可访问的来源/分类 API
+- `public/`：既有样式、浏览器 JS、favicon（无框架构建）
+- `migrations/`：从原数据结构升级到顶级来源类目
+- `../data/initial-blogs.csv`：独立保存的首次导入清单（不会再自动同步）
+- `../scripts/lib/feed.mjs`：跨 Node/Worker 共享的订阅解析器
 
 ## 本地开发
 
-本地用 wrangler 模拟 D1，数据存在 `.wrangler/state` 里的 SQLite 文件中，不需要 Cloudflare 账号。
+Node.js 22+：
 
-```sh
+```bash
 cd frontend
-npm install
-printf 'ADMIN_TOKEN=local-dev-token\nCACHE_TTL=0\nEMAIL_DEV_LOG=1\nBLOGS_CSV_URL=\nGITHUB_CLIENT_ID=\n' > .dev.vars
-npm run db:migrate      # 建表
-npm run dev:seed        # 写入一组本地测试博客和最近文章（只改本地 D1）
-npm run dev             # http://localhost:8787
+npm ci
+printf 'ADMIN_TOKEN=local-dev-token\nCACHE_TTL=0\nEMAIL_DEV_LOG=1\nGITHUB_CLIENT_ID=\n' > .dev.vars
+npm run db:migrate
+npm run dev:seed
+npm run dev
 ```
 
-本地测试登录请使用「邮箱验证码」，不要点 GitHub 登录：输入任意可接受的邮箱后，验证码会打印在运行 `npm run dev` 的终端中（`EMAIL_DEV_LOG=1`），不发送邮件。GitHub OAuth 通常只配置了线上回调地址。
+打开 http://localhost:8787。种子脚本写入测试文章（与实际 RSS 源分离），便于检查热门、最新、关注和屏蔽功能。启动 Worker 本身不会触发真实 RSS 抓取；首次调用 `POST /api/admin/crawl` 或 Cloudflare 定时任务时才会把本地初始目录导入 D1。
 
-`npm run dev:seed` 会创建「本地屏蔽测试博客」和 3 篇近期文章，因此“最新”和“最热”页面都有可见内容。登录后进入该博客主页点击「屏蔽」，该博客文章应从你的最新、分类最新和最热页面消失；在用户主页的「屏蔽的博客」标签中取消后，文章会重新出现。该种子命令可重复运行，不会重复插入文章。若想测试真实 RSS 抓取，可另开终端运行 `npm run crawl`；这会向外请求并抓取全部博客，耗时较长。
+如果要手动测试抓取：
 
-可以直接用 sqlite3 查看本地数据：
-
-```sh
-sqlite3 .wrangler/state/v3/d1/miniflare-D1DatabaseObject/*.sqlite "SELECT COUNT(*) FROM posts"
+```bash
+curl -X POST -H "Authorization: Bearer local-dev-token" \
+  "http://localhost:8787/api/admin/crawl?limit=20&favicons=0"
 ```
 
-## 页面与接口
+`all=1` 表示忽略下次抓取时间约束；`limit` 控制本轮处理数。大量订阅可能会消耗资源，建议从小批量开始。
 
-页面全部由 Worker 在服务端渲染（Hono + `hono/html`），不依赖 JS 就能看到完整内容，方便搜索引擎抓取（百度基本不执行 JS）。`public/app.js` 只负责投票和关注不刷新页面、目录搜索和复制按钮；没有 JS 时这些表单照常可用。
+## 页面
 
-| 路径 | 说明 |
+| 地址 | 含义 |
 | --- | --- |
-| `/`、`/page/2` | 热门（首页）：`(1 ÷ √博客本周发文数 + 票数×3 + 评论数) ÷ (小时数+2)^0.8`，候选为 7 天内的文章及 30 天内有互动的文章；同一博客的文章在榜单中依次乘 0.4。参数在 `worker/discuss.js` 的 `HOT` |
-| `/latest`、`/latest/page/2` | 最新文章，平铺列表；同一博客同一天超过 2 篇时折叠 |
-| `/c/<分类>`、`/c/<分类>/page/2` | 分类下的最新文章 |
-| `/blogs`、`/blogs/active`、`/blogs/dead` | 博客目录（全部 / 一年内活跃 / 疑似失效），显示关注数；抓取失败页列出所有当前失败的博客、原因和持续时间，方便纠错 |
-| `/b/<数字 id>`、`/b/<id>/page/2` | 博客主页：信息、发文统计、全部文章 |
-| `POST /b/<数字 id>/refresh` | 登录后立即重新抓取该博客的 RSS 并更新文章 |
-| `/b/<id>/followers` | 关注这个博客的人（公开，`noindex`） |
-| `/p/<数字 id>` | 文章讨论页。没有评论前是 `noindex`，避免几万个只有摘要的页面被判为薄内容 |
-| `/following`、`/following/page/2` | 我的关注：关注博主的全部文章，按时间倒序（需要登录，`noindex`） |
-| `/following/blogs`、`/following.opml` | 管理关注的博客、导出 OPML |
-| `/u/<用户名>`、`/u/<用户名>/upvoted`、`/u/<用户名>/following` | 用户主页：评论 / 点赞的文章 / 关注的博客（都公开） |
-| `/u/<用户名>/blocked` | 管理自己屏蔽的博客；仅本人可见，屏蔽仅影响自己的最新、分类最新和最热时间线 |
-| `/avatars/<用户 id>` | 用户头像 |
-| `/random` | 302 到一个最近活跃的博客 |
-| `/sitemap.xml`、`/robots.txt` | |
-| `/icons/<key>` | 博客 favicon |
-| `POST /api/admin/crawl?all=1&favicons=all` | 手动抓取，需要 `Authorization: Bearer $ADMIN_TOKEN` |
+| `/` | 热门文章 |
+| `/latest` | 全部来源的最新文章 |
+| `/c/sg-blogs` | 独立博客类目 |
+| `/c/sg-<类目ID>` | 自定义类目 |
+| `/blogs` | 订阅源目录（保留原路由） |
+| `/b/<数字ID>` | 订阅源详情（保留原路由） |
+| `/following` | 我的关注 |
+| `/following.opml` | 导出已关注来源 |
+| `/api/admin/feedspace/groups` | 管理来源类目 |
+| `/api/admin/feedspace/sources` | 管理 RSS 来源 |
+| `/api/admin/crawl` | 管理员手动抓取 |
 
-博客的数字 id 在第一次入库时分配（当前最大值 + 1），之后不变。渲染好的页面在边缘缓存 `CACHE_TTL` 秒（默认 300），本地开发在 `.dev.vars` 里设为 0。
+旧的 `/c/ai` 等博客主题分类 URL 仍可用，但主界面显示的是顶级来源类目。浏览器 CSS/JS 以及原有文章卡片、评论、投票均保留。
 
-## 部署到 Cloudflare
+## 独立数据维护
 
-需要 **Workers 付费计划**（$5/月）：免费计划每次运行最多只能发 50 个外部请求，不够抓取。
+第一轮抓取时执行一次 `syncBlogs` 导入 `../data/initial-blogs.csv`，并写入 `meta.initial_catalog_imported = 1`。此后定时任务**不再读取外部目录，也不会重新覆盖已有来源**。初始博客和新加论坛/资讯源都可通过管理员 API 修改。
 
-```sh
+数据存在你自己的 D1：`blogs`、`posts`、`users`、`follows` 等，原有数据结构保留。数据库迁移 `0011_feedspace_sources.sql` 加入类目表及来源标记。
+
+## 上线部署
+
+`wrangler.jsonc` 里已经删除原服务的域名、D1 UUID、OAuth 和 Telegram 账号值，默认使用占位数据库 ID，阻止误发布：
+
+```bash
+cd frontend
 npx wrangler login
-npx wrangler d1 create independent-blogs   # 把输出的 database_id 填进 wrangler.jsonc
+npx wrangler d1 create diggspace
+# 把新数据库的 ID 填到 wrangler.jsonc
 npx wrangler secret put ADMIN_TOKEN
-# 在 wrangler.jsonc 里把 SITE_URL 设为正式域名（canonical、sitemap、RSS 都用它）
-npm run deploy                              # 执行远程迁移并部署
-curl -N -X POST -H "Authorization: Bearer <token>" "https://<域名>/api/admin/crawl?all=1&favicons=all"   # 首次全量抓取
+npm run deploy
 ```
 
-之后定时任务每小时抓取「到期」的博客：30 天内有更新的每 1 小时，一年内有更新的每 3 小时，其余每 12 小时。抓取失败不到 1 天的保持原频率（可能只是临时故障），1–7 天 12 小时一次；连续 7 天失败标记为「疑似失效」，3 天一次，30 天后 7 天一次；超过 90 天标记为「已失效」，每 90 天检查一次（博客可能复活）。恢复后自动回到正常频率；在 CSV 里改了 feed 地址会立即重新抓取。临时错误（网络错误、429、5xx）会在同一轮里重试一次。手动抓取不带 `all=1` 时也只抓到期的博客。域名在 Cloudflare 的话，在 Worker 的 Settings → Domains & Routes 里添加自定义域名即可。
+`npm run deploy` 会先调用 `scripts/check-deployment.mjs`，验证 D1 ID 不为空且未引用旧服务，再执行远程迁移并发布 Worker。未设置自定义域名时，可先使用自己账号下的 workers.dev 地址；设置 `SITE_URL` 或 Cloudflare Route 时只能使用已获授权控制的域名。
 
-## 账号与讨论
+需要配置自己的用户登录渠道：
 
-- 登录方式：GitHub OAuth 和邮箱验证码。同一个已验证邮箱对应同一个账号；邮箱只用于登录，不公开。
-- 邮箱登录的新用户需要先在 `/settings` 设置用户名，才能投票和评论。
-- 文章投票、嵌套评论、评论投票（不能给自己投），没有 downvote。评论获得的赞计入用户的 karma。
-- 屏蔽博客：在博客主页点击「屏蔽」或「取消屏蔽」；被屏蔽博客的文章只对当前用户隐藏，在自己主页的「屏蔽的博客」标签管理。
-- 头像：GitHub 用户登录时把 GitHub 头像复制到本站（githubusercontent.com 在国内常常打不开）；也可以在 `/settings` 上传，浏览器先裁剪压缩成 160×160 再上传。只接受 PNG/JPEG/WebP/GIF。
-- `/icons/*` 和 `/avatars/*` 的响应带 `Content-Security-Policy: sandbox` 和 `nosniff`：favicon 可能是 SVG，直接打开时不能在本站执行脚本。
-- 站内信：有人回复你的评论时，右上角「消息」显示未读数，`/notifications` 查看，打开即标为已读。回复自己不通知；回复被删除时通知一起删除。
-- 文章讨论页有评论后才允许搜索引擎收录，并进入 sitemap。
-- 本地开发时 `.dev.vars` 里的 `EMAIL_DEV_LOG=1` 会把验证码打印到 `wrangler dev` 的输出里，不真正发信。
-- 设为管理员（可以删除任何评论）：`npx wrangler d1 execute independent-blogs --remote --command "UPDATE users SET is_admin = 1 WHERE username = '<用户名>'"`
+- **GitHub 登录（可选）**：创建自己的 OAuth App，回调 `<SITE_URL>/auth/github/callback`，设置 `GITHUB_CLIENT_ID` 和 Secret `GITHUB_CLIENT_SECRET`。
+- **邮箱登录（可选）**：启用自己的发件域，设置 `EMAIL_FROM` 并正确配置 Cloudflare Email Sending。
+- **Telegram 通知（可选）**：自己的 Bot Token、群组 ID，以及有效的 `SITE_URL`，否则不会发送。
 
-上线前需要：
+Cloudflare Worker 定时抓取将按订阅源活跃度安排复查：30 天内更新过的来源约每小时检查一次，一年内更新过的约每 3 小时，较久未更新的约每 12 小时。失败会退避重试。RSS 历史文章在 D1 中保存。生产抓取千余来源通常需要 Workers Paid 计划。
 
-```sh
-# GitHub 登录：在 https://github.com/settings/developers 新建 OAuth App，
-# 回调地址填 <SITE_URL>/auth/github/callback，把 Client ID 填进 wrangler.jsonc 的 GITHUB_CLIENT_ID
-npx wrangler secret put GITHUB_CLIENT_SECRET
-# 邮箱验证码：开通发信域名，并把 wrangler.jsonc 里的 EMAIL_FROM 改成这个域名下的地址
-npx wrangler email sending enable <域名>
+更多类目和来源管理示例见根目录 [FEEDSPACE.md](../FEEDSPACE.md)。
+
+## 测试
+
+```bash
+# 在仓库根目录
+node scripts/lint.mjs
+python3 scripts/test_feedspace_schema.py
+node scripts/test_independence.mjs
+# 安装完前端依赖后：
+node frontend/scripts/test-feedspace.mjs
 ```
 
-## Telegram 群通知
-
-有新博客收录时（名单同步发现从没见过的博客）立即发一条消息；每周一北京时间 9:00 发本周获赞最多的 10 篇文章（统计过去 7 天内的点赞）。未配置时什么都不会发。
-
-```sh
-# 用 @BotFather 创建 bot，把它拉进群；chat id 填进 wrangler.jsonc 的 TELEGRAM_CHAT_ID（群一般是负数）
-npx wrangler secret put TELEGRAM_BOT_TOKEN
-npx wrangler deploy
-# 手动发一次周榜：curl -X POST -H "Authorization: Bearer <ADMIN_TOKEN>" https://indi.blog/api/admin/weekly-top
-```
+MIT 许可和原软件著作权声明保留在根目录 [LICENSE](../LICENSE)。
