@@ -189,8 +189,8 @@ export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
     const data = sourceChanges(await jsonBody(c), true);
     if (!data || !Object.keys(data).length) return invalid(c, 'Invalid changes');
     const db = c.env.DB;
-    const source = await db.prepare("SELECT id, feed FROM blogs WHERE num = ? AND source_origin = 'manual'").bind(num).first();
-    if (!source) return c.json({ error: 'Only manually-added sources can be edited' }, 404);
+    const source = await db.prepare("SELECT id, feed FROM blogs WHERE num = ?").bind(num).first();
+    if (!source) return c.json({ error: 'Source not found' }, 404);
     if (data.source_group && !await db.prepare('SELECT 1 FROM source_groups WHERE id = ?').bind(data.source_group).first()) {
       return invalid(c, 'Unknown groupId');
     }
@@ -206,7 +206,8 @@ export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
     } else if (data.removed === 0) {
       fields.push('next_check_at = NULL');
     }
-    await db.prepare("UPDATE blogs SET " + fields.join(', ') + " WHERE num = ? AND source_origin = 'manual'")
+    fields.push("source_origin = 'manual'");
+    await db.prepare("UPDATE blogs SET " + fields.join(', ') + " WHERE num = ?")
       .bind(...args, num).run();
     await refresh(c);
     return c.json({ ok: true, num });
@@ -217,9 +218,9 @@ export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
     const no = authorized(c); if (no) return no;
     const num = Number(c.req.param('num'));
     if (!Number.isSafeInteger(num) || num < 1) return invalid(c, 'Invalid source number');
-    const res = await c.env.DB.prepare("UPDATE blogs SET removed = 1 WHERE num = ? AND source_origin = 'manual'")
+    const res = await c.env.DB.prepare("UPDATE blogs SET removed = 1, source_origin = 'manual' WHERE num = ?")
       .bind(num).run();
-    if (!res.meta?.changes) return c.json({ error: 'Manual source not found' }, 404);
+    if (!res.meta?.changes) return c.json({ error: 'Source not found' }, 404);
     await refresh(c);
     return c.json({ ok: true });
   });
