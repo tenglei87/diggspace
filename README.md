@@ -48,21 +48,11 @@ python3 scripts/feedspace_admin.py add-group news '资讯网站'
 python3 scripts/feedspace_admin.py add-source --name V2EX --url https://www.v2ex.com/ --feed https://www.v2ex.com/index.xml --group forum
 ```
 
-## 部署到自己的 Cloudflare
+## 部署结构
 
-**当前配置刻意使用无效的 D1 占位 ID，无法直接部署到任何已存在的数据库。**
+DiggSpace 使用**自己的 Cloudflare Worker + D1 + digg.space Custom Domain**，独立于原作者网站。推荐通过下方手动 GitHub Actions 工作流发布；它不会在代码推送时自动部署。
 
-1. 在自己的 Cloudflare 账号中创建一个新的 D1：`npx wrangler d1 create diggspace`。
-2. 将返回的 `database_id` 写入 `frontend/wrangler.jsonc`，不要复用他人的数据库 ID。
-3. 创建自己的管理员密钥：`npx wrangler secret put ADMIN_TOKEN`。
-4. 根据需要配置自己的 `SITE_URL`、邮件发信、GitHub OAuth、Telegram；这些功能默认不绑定他人的账号。
-5. 在 `frontend` 中运行 `npm run deploy`，脚本会先检查数据库 ID 和是否存在上游配置。
-6. 部署后通过管理接口添加来源并执行首次抓取；自动抓取由 Cloudflare Cron 负责，不依赖 GitHub Actions。
-
-需要 Worker 付费套餐来支持大量外部抓取请求。上线前建议先在少量订阅源上验证抓取和数据库费用。
-
-详细操作见 [FEEDSPACE.md](./FEEDSPACE.md) 和 [frontend/README.md](./frontend/README.md)。
-
+仓库中仍保留无效 D1 占位 ID，防止误用其他账号资源。上线初期默认关闭 Cron 和未配置的邮件登录。需要大规模 RSS 抓取前，请确认 Cloudflare 套餐额度。
 
 ## 使用 digg.space 自定义域名部署
 
