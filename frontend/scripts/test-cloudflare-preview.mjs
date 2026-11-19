@@ -1,11 +1,11 @@
-// Read-only validation of the freshly deployed workers.dev preview.
+// Read-only validation of the freshly deployed digg.space custom domain.
 // Never inserts test records into the production D1 database.
 import assert from 'node:assert/strict';
 
 const base = process.env.DIGGSPACE_URL;
 const token = process.env.DIGGSPACE_ADMIN_TOKEN;
-if (!base || !/^https:\/\/[^/]+\.workers\.dev$/.test(base) || !token) {
-  throw new Error('Missing verified workers.dev URL or admin token');
+if (base !== 'https://digg.space' || !token) {
+  throw new Error('Expected https://digg.space and a configured admin token');
 }
 
 async function request(path, { authorized = false, method = 'GET', headers = {}, body } = {}) {
