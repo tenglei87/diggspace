@@ -1,41 +1,28 @@
-# FeedSpace — 多网站 RSS 聚合扩展
+# DiggSpace · 独立来源管理
 
-本分支以 [Indi / 中文独立博客](https://github.com/timqian/chinese-independent-blogs) 为基础，将所有现有博客保留在顶级类目 **独立博客**，之后可以通过管理员接口增加论坛、资讯网站、RSSHub 等订阅源。
+本项目保留既有网站布局和 RSS 抓取能力，但**独立维护数据与服务**。没有上游 CSV 拉取、上游 API 依赖或定时覆盖，且不会使用其他项目的 Cloudflare 域名、数据库或账号配置。
 
-## 保持原界面
+## 从初始目录到独立数据库
 
-- 不修改 `frontend/public/style.css`、`frontend/public/app.js`、原有页面布局及文章卡片样式。
-- 原来的分类位置显示顶级**来源类目**，并复用原来的 CSS / JS 筛选功能。
-- 所有来源仍然进入原有首页热门、最新、关注、评论和文章详情页面。
-- 原来的 AI、编程等主题标签保留在数据表中，旧的 `/c/ai` 等分类链接仍可以访问。
-- 不新增管理员可视化页面，后台通过受保护的 API 或命令行操作。
+首次调用 `/api/admin/crawl` 或 Cloudflare 定时任务时：
 
-## 数据和同步
+1. 读取仓库自带的 `data/initial-blogs.csv`（静态初始化快照）。
+2. 写入新的 D1 `blogs` 表，并默认放到 `独立博客` 顶级类目。
+3. 在数据库的 `meta` 表写入 `initial_catalog_imported = 1`。
+4. 后续每次定时任务只处理到期的 RSS 抓取和首页快照，不再同步或恢复这份目录。
 
-运行 `frontend/migrations/0011_feedspace_sources.sql` 后，原有 `blogs` 记录自动获得：
+**特别注意：** 每一个 D1 数据库只执行一次初始化。如果需要修改已有内容，请通过管理员 CLI/API 操作，而不是编辑快照 CSV 期待自动更新。快照保留在仓库中是为了全新数据库能够复现最初的博客集合。
 
-- `source_group = 'blogs'`（独立博客）；
-- `source_origin = 'csv'`（来自原仓库的博客目录）。
+数据库 `source_origin` 字段仅标记记录来源（初始 CSV 或手动），不代表它们依赖外部服务。初始记录也可随时由本站管理员修改；修改后将成为 `manual`。
 
-手动添加的来源使用 `source_origin = 'manual'`。CSV 同步仅更新 CSV 来源，绝不会把手动来源标记为移除。手动来源与原博客共享抓取、去重、重试和文章存储逻辑。
+## 分类与订阅源
 
-## 本地运行
+- `独立博客`（固定默认类目，ID `blogs`）
+- `论坛社区`、`资讯网站`、其他分类：通过后台创建
+- RSSHub 返回的是 RSS/Atom 订阅地址，按普通来源添加，自己选择目标类目即可
+- 在原版布局中展示全部类目，所有网站文章共同参与最新、热门和关注列表
 
-按照原项目 `frontend/README.md` 安装 Node.js >= 20，并创建 `frontend/.dev.vars`（`ADMIN_TOKEN`、`CACHE_TTL=0`、`BLOGS_CSV_URL=`、`EMAIL_DEV_LOG=1`、`GITHUB_CLIENT_ID=`）。
-
-```bash
-cd frontend
-npm ci
-npm run db:migrate
-npm run dev:seed
-npm run dev
-```
-
-首次全量抓取可使用原有 `POST /api/admin/crawl?all=1&favicons=all`，测试环境也能先仅抓取少量来源。
-
-## 增加类目和来源（无需修改代码）
-
-使用 Python 3 标准库即可：
+管理员 CLI 位于仓库根目录的 `scripts/feedspace_admin.py`：
 
 ```bash
 export FEEDSPACE_URL=http://localhost:8787
@@ -46,45 +33,75 @@ python3 scripts/feedspace_admin.py add-group forum '论坛社区'
 python3 scripts/feedspace_admin.py add-group news '资讯网站'
 
 python3 scripts/feedspace_admin.py add-source \
-  --name 'V2EX' --url 'https://www.v2ex.com/' \
-  --feed 'https://www.v2ex.com/index.xml' --group forum
+  --name 'V2EX' \
+  --url 'https://www.v2ex.com/' \
+  --feed 'https://www.v2ex.com/index.xml' \
+  --group forum
 
 python3 scripts/feedspace_admin.py sources --group forum
 python3 scripts/feedspace_admin.py update-source 1234 --group news
+python3 scripts/feedspace_admin.py update-source 1234 --feed https://www.v2ex.com/index.xml
 python3 scripts/feedspace_admin.py disable-source 1234
 python3 scripts/feedspace_admin.py enable-source 1234
 ```
 
-`1234` 请换成 `sources` 命令返回的真实 `num`。RSSHub 的 feed 地址与普通 RSS/Atom URL 一样添加（`--feed` 指向实际可访问的订阅 XML 地址）。
+替换示例编号 `1234` 为 `sources` 返回的真实 `num`；也可直接管理第一次导入的博客。
 
-后台 API ：
+### 管理 API
 
-| 方法 | 路由 | 作用 |
+全部使用 `Authorization: Bearer $ADMIN_TOKEN`，不能在网页前台公开这个 Token。
+
+| 请求 | 路由 | 功能 |
 | --- | --- | --- |
-| GET / POST | `/api/admin/feedspace/groups` | 查看、新增类目 |
-| PATCH / DELETE | `/api/admin/feedspace/groups/:id` | 重命名、删除空类目 |
-| GET / POST | `/api/admin/feedspace/sources` | 查询、新增来源 |
-| PATCH / DELETE | `/api/admin/feedspace/sources/:num` | 编辑、软删除手动来源 |
+| GET / POST | `/api/admin/feedspace/groups` | 列出 / 添加类别 |
+| PATCH / DELETE | `/api/admin/feedspace/groups/:id` | 修改 / 删除空类别 |
+| GET / POST | `/api/admin/feedspace/sources` | 列出 / 添加 RSS 来源 |
+| PATCH / DELETE | `/api/admin/feedspace/sources/:num` | 编辑 / 禁用 RSS 来源 |
 
-全部接口都要求 `Authorization: Bearer $ADMIN_TOKEN`。用户不能通过前台添加任意网址。
+删除来源为软删除，文章、关注历史仍保留。后台添加 RSS 必须有有效的 `http(s)` URL；它不负责通用的网页 RSS 自动发现或托管 RSSHub 服务。
 
-## 正式部署前必须修改 Cloudflare 配置
+## 运行和部署
 
-**Fork 会保留原作者的部署配置。不要直接运行 `wrangler deploy`。**
+### 本地
 
-1. 在你自己的 Cloudflare 账号中创建**新的 D1 数据库**，在 `frontend/wrangler.jsonc` 修改 `d1_databases[0].database_id` 为新 ID（对应的 database_name 要与脚本配置一致）。
-2. 把 `SITE_URL` 和 `routes` 改成你控制的域名，**不得继续使用 `indi.blog`**。
-3. 把原作者的 `GITHUB_CLIENT_ID`、`EMAIL_FROM`、`TELEGRAM_CHAT_ID` 改为自己的设置，或者先禁用相应服务；邮箱、OAuth、Telegram 都需要独立配置才能正常运行。
-4. 单独设置自己的 `ADMIN_TOKEN`，不要提交到 GitHub。
-5. 本地迁移与抓取测试通过以后，再对新的远程 D1 执行迁移并部署。
-6. 公共博客目录继续通过 `BLOGS_CSV_URL` 自动同步上游；如果将来需要完全独立维护，再修改为自己的 CSV 地址。
+```bash
+cd frontend
+npm ci
+printf 'ADMIN_TOKEN=local-dev-token\nCACHE_TTL=0\nEMAIL_DEV_LOG=1\nGITHUB_CLIENT_ID=\n' > .dev.vars
+npm run db:migrate
+npm run dev:seed
+npm run dev
+```
 
-## 已知限制
+可用 `npm run crawl` 在另一个终端进行首次抓取；最初约千余博客，建议测试时使用 `/api/admin/crawl?limit=20` 控制批次。
 
-- 添加来源时必须填写有效的 RSS/Atom 订阅地址；**没有**任意网站自动寻找 RSS、任意网页提取或 RSSHub 实例托管功能。
-- 后台仅供可信管理员使用；如将来允许用户自行提交 RSS，必须在抓取端额外实施 DNS 与重定向链的 SSRF 防护、审核、限流。
-- 编辑手动来源地址会保留原记录的稳定 ID；修改 feed 地址会重置抓取状态，以接纳新来源的文章。
-- 新增来源后，定时抓取或手动触发抓取才能出现文章；匿名页面缓存最长可能延迟 `CACHE_TTL` 秒。
-- 首次升级前请备份已有 D1 数据库，避免误部署或误迁移。
+### 生产
 
-原作者 MIT License 和版权信息继续保留。
+1. 使用你自己的 Cloudflare 账号创建 `diggspace` D1，运行 `npx wrangler d1 create diggspace`。
+2. 替换 `frontend/wrangler.jsonc` 里全部零的 D1 占位 UUID。
+3. 在自己的 Worker 上用 `npx wrangler secret put ADMIN_TOKEN` 设置强随机令牌。
+4. 正式域名和 `SITE_URL` 必须是你控制的地址；默认未配置第三方域名。
+5. GitHub OAuth、邮件验证码和 Telegram 可根据需求单独接入自己的帐号。默认不使用任何继承凭据。
+6. 在 `frontend/` 运行 `npm run deploy`（先检查 D1，再执行远程迁移和 Worker 发布）。
+
+注意，邮件绑定 `EMAIL` 及登录邮件发送需要 Cloudflare Email Sending 正确配置自己的发件域名；未启用时不要依赖邮箱登录作为生产环境的唯一方式。
+
+没有自动部署、原站接口拉取或 GitHub 工作流定时改写。Cloudflare Cron 执行独立 RSS 抓取；GitHub Actions 只在 PR 中检查代码，权限只读。
+
+## 检查
+
+```bash
+node scripts/lint.mjs
+python3 scripts/test_feedspace_schema.py
+node scripts/test_independence.mjs
+node frontend/scripts/test-feedspace.mjs
+```
+
+最后一项依赖先在 `frontend/` 中执行 `npm ci` 安装 `hono`。
+
+## 限制与安全
+
+- 新来源使用管理员后台添加，不提供公开用户任意提交 URL 的入口。未来如开放，必须对 DNS 和多次重定向路径做 SSRF 防护，限制 IP、端口、超时、内容大小和并发。
+- RSSHub 必须由其他服务提供订阅地址。部分资讯站/论坛不能直接用网页链接抓取。
+- 新的 Cloudflare 数据库、密钥及域名仍需要自行创建和配置，仓库中不包含可用于生产的真实账号资源。
+- 原软件 MIT 许可证和原作者署名保留。这是合法独立维护的衍生版，不代表原创底层源码。
