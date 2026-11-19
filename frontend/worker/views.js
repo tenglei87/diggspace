@@ -180,7 +180,7 @@ ${jsonLd.map(jsonLdScript)}
     <nav class="tabs" aria-label="主导航">
       ${NAV.map(([id, href, label]) => html`<a href="${href}"${current(nav === id)}>${label}</a>`)}
     </nav>
-    <div class="account"><a class="search" href="/blogs" title="搜索博客" aria-label="搜索博客"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></a>${user
+    <div class="account"><a class="search" href="/blogs" title="搜索来源" aria-label="搜索来源"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></a>${user
       ? html`${user.username
         ? html`<a class="inbox" href="/notifications" title="${user.unread ? `${user.unread} 条未读回复` : '消息'}" aria-label="${user.unread ? `${user.unread} 条未读回复` : '消息'}"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>${user.unread ? html`<span class="unread">${user.unread > 99 ? '99+' : user.unread}</span>` : ''}</a>
               <a class="me" href="/u/${user.username}" title="${user.username}" aria-label="${user.username}">${userAvatar(user)}</a>`
@@ -190,10 +190,10 @@ ${jsonLd.map(jsonLdScript)}
   <div class="page">
     <main>${body}</main>
     <aside class="side">
-      ${stats ? html`<p class="stats"><a href="/blogs">收录 <b>${stats.blogs.toLocaleString('en-US')}</b> 个博客</a><br>本周 <b>${stats.weekBlogs}</b> 位博主更新<br>24 小时内 <b>${stats.dayPosts}</b> 篇</p>` : ''}
+      ${stats ? html`<p class="stats"><a href="/blogs">收录 <b>${stats.blogs.toLocaleString('en-US')}</b> 个来源</a><br>本周 <b>${stats.weekBlogs}</b> 个来源更新<br>24 小时内 <b>${stats.dayPosts}</b> 篇</p>` : ''}
       <h2>分类</h2>
       ${categoryLinks(cat, 'side-cats', stats?.sourceGroups)}
-      <p class="side-links"><a href="/random" rel="nofollow">随机逛一个博客 →</a></p>
+      <p class="side-links"><a href="/random" rel="nofollow">随机逛一个网站 →</a></p>
       ${githubBadge(stats?.stars)}
       <div class="about">${SITE_NAME} 汇聚独立博客、论坛及资讯网站的 RSS 更新，<details class="hint"><summary>定时检查 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>订阅源由本站独立维护。</div>
     </aside>
@@ -393,7 +393,7 @@ export function directoryPage({ site, stats, user, following, blogs, view, now }
     body: html`
       <h1 class="visually-hidden">博客列表</h1>
       <div class="controls">
-        <input type="search" id="q" placeholder="搜索博客名、域名或标签" aria-label="搜索博客">
+        <input type="search" id="q" placeholder="搜索来源名、域名或标签" aria-label="搜索来源">
         <nav class="seg" aria-label="状态">
           ${Object.entries(DIRECTORY_VIEWS).map(([id, [text, href]]) => html`<a href="${href}"${current(id === view)}>${text}</a>`)}
         </nav>
@@ -402,7 +402,7 @@ export function directoryPage({ site, stats, user, following, blogs, view, now }
         <button data-cat="" aria-pressed="true">全部</button>
         ${(stats?.sourceGroups ?? [{ id: 'blogs', name: '独立博客' }]).map(({ id, name }) => html`<button data-cat="sg-${id}" aria-pressed="false">${name}</button>`)}
       </div>
-      <div class="result-count" id="result-count">共 ${blogs.length} 个博客</div>
+      <div class="result-count" id="result-count">共 ${blogs.length} 个来源</div>
       ${view === 'dead' ? html`<p class="list-note">以下博客的 RSS 目前抓取失败，最近失败的在前。连续失败 7 天（RSS 不存在、域名失效等明确错误为 1 天）标记为疑似失效，90 天为已失效。如发现订阅地址有误，请联系本站管理员更新，下一次抓取时生效。</p>` : ''}
       <ul class="blogs" id="bloglist">${blogs.map((b) => blogRow(b, now, following, path, { showFailure: view === 'dead' }))}</ul>`,
   });
