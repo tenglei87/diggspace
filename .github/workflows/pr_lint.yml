@@ -3,6 +3,9 @@ name: Lint metadata and FeedSpace
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
