@@ -59,8 +59,8 @@ async function runBatches(db, statements) {
   }
 }
 
-// Mirror the CSV into the blogs table. Blogs no longer in the CSV are marked
-// removed rather than deleted, so their posts stay linked.
+// One-time import of the bundled initial blog directory. Never sync again on cron.
+// All imported and manually-created sources are editable in this installation.
 export async function syncBlogs(db, csvText) {
   const blogs = parseBlogsCsv(csvText);
   const upsert = db.prepare(`
@@ -230,16 +230,13 @@ export async function crawlFavicons(db, limit, nowMs = Date.now(), onProgress = 
 
 // Precompute every blog's metadata and monthly post counts (for the directory
 // and blog pages) plus the sidebar numbers, so those pages cost one row read.
-export const REPO = 'timqian/chinese-independent-blogs';
+export const REPO = 'tenglei87/diggspace';
 
 // Star count for the sidebar badge, or null if GitHub can't be reached.
 // Authenticating as the OAuth app avoids the low anonymous rate limit, which
 // Workers share with everyone else on the same egress IPs.
 export async function repoStars(env) {
-  const headers = { 'User-Agent': 'Indi', Accept: 'application/vnd.github+json' };
-  if (env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET) {
-    headers.Authorization = `Basic ${btoa(`${env.GITHUB_CLIENT_ID}:${env.GITHUB_CLIENT_SECRET}`)}`;
-  }
+  const headers = { 'User-Agent': 'DiggSpace', Accept: 'application/vnd.github+json' };
   try {
     const res = await fetch(`https://api.github.com/repos/${REPO}`, { headers, signal: AbortSignal.timeout(10_000) });
     return res.ok ? (await res.json()).stargazers_count ?? null : null;
