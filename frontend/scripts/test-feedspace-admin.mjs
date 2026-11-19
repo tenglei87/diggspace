@@ -8,8 +8,8 @@ class FakeD1 {
   constructor() {
     this.groups = new Map([['blogs', { id: 'blogs', name: '独立博客', sort_order: 0 }]]);
     this.sources = new Map([
-      [1, { num: 1, id: 'existing.example', name: 'Existing blog', url: 'https://existing.example/',
-        feed: 'https://existing.example/feed.xml', tags: '[]', categories: '[]',
+      [1, { num: 1, id: 'existing.example', name: 'Existing blog', url: 'https://existing.example.com/',
+        feed: 'https://existing.example.com/feed.xml', tags: '[]', categories: '[]',
         source_group: 'blogs', source_origin: 'csv', removed: 0 }],
     ]);
     this.nextNum = 2;
@@ -120,11 +120,13 @@ assert.equal((await call('POST', '/groups', { id: '!bad', name: '错误' })).sta
 assert.equal((await call('PATCH', '/groups/forum', { name: '独立论坛' })).status, 200);
 assert.equal(db.groups.get('forum').name, '独立论坛');
 
-const feed = { name: '论坛', url: 'https://forum.example/', feed: 'https://forum.example/index.xml', groupId: 'forum' };
+const feed = { name: '论坛', url: 'https://forum.example.com/', feed: 'https://forum.example.com/index.xml', groupId: 'forum' };
 assert.equal((await call('POST', '/sources', feed)).status, 201);
 assert.equal((await call('POST', '/sources', feed)).status, 409);
 assert.equal((await call('POST', '/sources', { ...feed, feed: 'http://127.0.0.1/rss' })).status, 400);
-assert.equal((await call('POST', '/sources', { ...feed, feed: 'https://forum.example/other.xml' })).status, 201,
+assert.equal((await call('POST', '/sources', { ...feed, feed: 'https://forum.example/rss' })).status, 400,
+  'reserved .example test domains must never be accepted as feed hosts');
+assert.equal((await call('POST', '/sources', { ...feed, feed: 'https://forum.example.com/other.xml' })).status, 201,
   'same website can have multiple distinct RSSHub feeds');
 assert.equal((await call('GET', '/sources')).body.sources.length, 3);
 
