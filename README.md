@@ -64,25 +64,31 @@ python3 scripts/feedspace_admin.py add-source --name V2EX --url https://www.v2ex
 详细操作见 [FEEDSPACE.md](./FEEDSPACE.md) 和 [frontend/README.md](./frontend/README.md)。
 
 
-## 一键部署到自己的 Cloudflare（预览版）
+## 使用 digg.space 自定义域名部署
 
-现在提供一个**只支持手动触发**的 GitHub Actions 工作流，可自动创建或复用你账号里的独立 D1，执行全部迁移，然后部署到自己的 workers.dev。首次部署为了控制资源消耗，**不启用定时抓取，也不会启用邮箱登录**；不接触旧站域名。
+**主站地址：https://digg.space**。域名托管在用户自己的 Cloudflare 账号，GitHub Actions 只在手动触发后为 `diggspace` 创建/复用独立 D1 并发布 Cloudflare Worker，`SITE_URL` 与规范化链接均固定指向该域名。预览版不再作为发布目标。
 
-在 GitHub 仓库 **Settings → Secrets and variables → Actions → Repository secrets** 新增以下三个值，**不要发送到聊天或提交到仓库文件中**：
+### GitHub Secrets
 
-| Secret 名称 | 从哪里获得 |
+GitHub → Settings → Secrets and variables → Actions → Repository secrets：
+
+| 名称 | 值 |
 | --- | --- |
-| CLOUDFLARE_ACCOUNT_ID | Cloudflare Dashboard 的 Account ID |
-| CLOUDFLARE_API_TOKEN | 自建 API Token，仅授权目标账号需要的 Workers 部署与 D1 创建/查询/迁移权限 |
-| DIGGSPACE_ADMIN_TOKEN | 自己生成至少 32 位的随机管理员令牌，例如使用本地 Node.js 的 crypto.randomBytes(32).toString('hex') |
+| `CLOUDFLARE_ACCOUNT_ID` | 持有 digg.space 的 Cloudflare Account ID |
+| `CLOUDFLARE_API_TOKEN` | 你自己的 Cloudflare API Token，不要粘贴到聊天里 |
+| `DIGGSPACE_ADMIN_TOKEN` | 至少 32 字符随机令牌，用于管理员 API |
 
-然后打开仓库 [Actions](https://github.com/tenglei87/diggspace/actions) → **Deploy DiggSpace preview (manual)** → **Run workflow**，选择 `master`，在确认框填写 `DEPLOY_DIGGSPACE`。
+首次创建 Worker 和 D1 以及绑定域名时，Token 至少需要目标账号内 **Workers 产品 Admin、D1 Admin** 权限，另加 **Zone → Workers Routes → Write**，作用域仅选择 **digg.space** Zone。域名必须处于活动状态。无需授予全部 Zone 的 DNS Edit 权限。
 
-工作流会先核验 Secrets，随后创建/复用 `diggspace` D1、生成只针对本次运行的安全配置、迁移并部署 Worker，最后用真实 workers.dev URL 检查首页和管理员 API。GitHub Actions 的运行摘要会提供预览 URL。
+在 GitHub [Actions](https://github.com/tenglei87/diggspace/actions) → **Deploy DiggSpace to digg.space (manual)** → Run workflow，选择 `master`，填写确认短语 `BIND_DIGG_SPACE`。
 
-**重要安全限制：** 仓库内的 D1 ID 仍然是无效占位符，不会写入真实账号 ID。每次手动部署都会在 runner 内临时获得正确 ID。该工作流不会在 `push` 或 PR 时自动上线；预览版不自动抓取 1609 个 RSS，也不发送登录验证码。可在验证 Worker/D1 成功之后单独开启抓取，避免超出免费计划限制。
+工作流将检查 Secrets、创建或重用账户内的 `diggspace` D1、执行迁移、设置 `digg.space` Custom Domain、写入 `ADMIN_TOKEN`，最后验证 `https://digg.space` 的首页和受保护的管理 API。
 
-详细配置参见 [FEEDSPACE.md](./FEEDSPACE.md)。
+Cloudflare 通常会为 Custom Domain 创建 DNS 和证书。如果根域名已有冲突 CNAME / 路由，需要先在 Cloudflare 控制台评估并处理，**不要直接删除其他业务 DNS**。本脚本不会主动删除 DNS。
+
+为保护首次上线资源，自动 RSS Cron、未配置的邮箱登录和不适用于免费计划的抓取额度参数仍暂时禁用。首次上线后需要有意识地启动少量 RSS 抓取才会显示文章。
+
+详细说明见 [FEEDSPACE.md](./FEEDSPACE.md)。
 
 ## 开源许可与版权
 
