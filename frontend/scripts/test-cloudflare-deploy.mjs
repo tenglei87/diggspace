@@ -12,7 +12,7 @@ assert.equal(resolveDiggspaceD1([]), null);
 assert.equal(resolveDiggspaceD1([{ name: 'other', uuid: UUID }]), null);
 assert.equal(resolveDiggspaceD1([{ name: 'diggspace', uuid: UUID }]), UUID);
 assert.equal(resolveDiggspaceD1([{ name: 'diggspace', id: UUID }]), UUID);
-assert.throws(() => resolveDiggspaceD1([{}]));
+assert.equal(resolveDiggspaceD1([{}]), null, 'unrelated databases must be ignored');
 assert.throws(() => resolveDiggspaceD1([{ name: 'diggspace', uuid: 'not-a-uuid' }]));
 assert.throws(() => resolveDiggspaceD1([
   { name: 'diggspace', uuid: UUID }, { name: 'diggspace', uuid: UUID },
