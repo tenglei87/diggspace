@@ -15,7 +15,9 @@ const fTime = new Intl.DateTimeFormat('zh-CN', { timeZone: TZ, hour: '2-digit', 
 const fDate = new Intl.DateTimeFormat('zh-CN', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 const fMonth = new Intl.DateTimeFormat('zh-CN', { timeZone: TZ, month: 'numeric' });
 
-export const categoryName = (id) => CATEGORIES.find(([cid]) => cid === id)?.[1];
+export const categoryName = (id, groups = []) => id.startsWith('sg-')
+  ? groups.find((group) => group.id === id.slice(3))?.name
+  : CATEGORIES.find(([cid]) => cid === id)?.[1];
 // Links to blogs and posts come from feeds and the CSV; only http(s) may become an href
 const safeHref = (url) => (/^https?:\/\//i.test(url ?? '') ? url : '#');
 const iso = (t) => new Date(t * 1000).toISOString();
@@ -137,10 +139,10 @@ function githubBadge(stars) {
 
 // Category links: in the sidebar on wide screens, and as one scrolling row
 // above the latest list on narrow ones
-function categoryLinks(cat, cls) {
+function categoryLinks(cat, cls, groups = [{ id: 'blogs', name: '独立博客' }]) {
   return html`<nav class="${cls}" aria-label="分类">
     <a href="/latest"${current(cat === '')}>全部</a>
-    ${CATEGORIES.map(([id, name]) => html`<a href="/c/${id}"${current(cat === id)}>${name}</a>`)}
+    ${groups.map(({ id, name }) => html`<a href="/c/sg-${id}"${current(cat === `sg-${id}`)}>${name}</a>`)}
   </nav>`;
 }
 
@@ -190,7 +192,7 @@ ${jsonLd.map(jsonLdScript)}
     <aside class="side">
       ${stats ? html`<p class="stats"><a href="/blogs">收录 <b>${stats.blogs.toLocaleString('en-US')}</b> 个博客</a><br>本周 <b>${stats.weekBlogs}</b> 位博主更新<br>24 小时内 <b>${stats.dayPosts}</b> 篇</p>` : ''}
       <h2>分类</h2>
-      ${categoryLinks(cat, 'side-cats')}
+      ${categoryLinks(cat, 'side-cats', stats?.sourceGroups)}
       <p class="side-links"><a href="/random" rel="nofollow">随机逛一个博客 →</a></p>
       ${githubBadge(stats?.stars)}
       <div class="about">${SITE_NAME} 收录中文独立博客，<details class="hint"><summary>每小时检查一次 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>欢迎在 GitHub 上<a href="https://github.com/timqian/chinese-independent-blogs">提交你的博客</a>。</div>
@@ -253,7 +255,7 @@ function foldedList(posts, opts) {
 }
 
 export function timelinePage({ site, stats, user, voted, posts, page, hasMore, cat, now }) {
-  const name = cat && categoryName(cat);
+  const name = cat && categoryName(cat, stats?.sourceGroups);
   const base = cat ? `/c/${cat}` : '/latest';
   const path = page > 1 ? `${base}/page/${page}` : base;
   const pageSuffix = page > 1 ? ` · 第 ${page} 页` : '';
@@ -267,7 +269,7 @@ export function timelinePage({ site, stats, user, voted, posts, page, hasMore, c
     jsonLd: name ? [breadcrumbs(site, [[SITE_NAME, '/'], [name, base]])] : [],
     body: html`
       <h1 class="${name ? 'page-title' : 'visually-hidden'}">${name || '最新文章'}</h1>
-      ${categoryLinks(cat || '', 'top-cats')}
+      ${categoryLinks(cat || '', 'top-cats', stats?.sourceGroups)}
       ${posts.length ? foldedList(posts, { now, voted, next: path, showDate: true }) : html`<p class="empty-note">这里还没有文章。</p>`}
       ${pager(base, page, hasMore)}`,
   });
@@ -370,7 +372,7 @@ function blogRow(b, now, following, next, { showFailure = false } = {}) {
   const failingFor = !b.failingSince ? '' : now - b.failingSince < DAY
     ? `${Math.max(1, Math.floor((now - b.failingSince) / 3600))} 小时`
     : `${Math.floor((now - b.failingSince) / DAY)} 天`;
-  return html`<li class="blog" data-search="${search}" data-cats="${b.categories.join(' ')}">${avatar(b)}
+  return html`<li class="blog" data-search="${search}" data-cats="${[...b.categories, `sg-${b.sourceGroup || 'blogs'}`].join(' ')}">${avatar(b)}
     <div class="blog-main"><a class="blog-name" href="/b/${b.num}">${b.name}</a>
       <div class="blog-sub">${host(b.url)}${showFailure && b.failingSince
       ? ` · ${errorReason(b.error)} · 已失败 ${failingFor}`
@@ -398,7 +400,7 @@ export function directoryPage({ site, stats, user, following, blogs, view, now }
       </div>
       <div class="top-cats always" id="dir-chips">
         <button data-cat="" aria-pressed="true">全部</button>
-        ${CATEGORIES.map(([id, name]) => html`<button data-cat="${id}" aria-pressed="false">${name}</button>`)}
+        ${(stats?.sourceGroups ?? [{ id: 'blogs', name: '独立博客' }]).map(({ id, name }) => html`<button data-cat="sg-${id}" aria-pressed="false">${name}</button>`)}
       </div>
       <div class="result-count" id="result-count">共 ${blogs.length} 个博客</div>
       ${view === 'dead' ? html`<p class="list-note">以下博客的 RSS 目前抓取失败，最近失败的在前。连续失败 7 天（RSS 不存在、域名失效等明确错误为 1 天）标记为疑似失效，90 天为已失效。如果你知道正确的 RSS 地址，欢迎<a href="https://github.com/timqian/chinese-independent-blogs/edit/master/blogs-original.csv" target="_blank" rel="noopener">在 GitHub 上修改</a>，合并后一小时内会重新抓取。</p>` : ''}
