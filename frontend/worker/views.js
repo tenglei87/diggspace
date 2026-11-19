@@ -4,9 +4,9 @@
 import { html, raw } from 'hono/html';
 import { CATEGORIES } from './categories.js';
 
-export const SITE_NAME = 'Indi';
+export const SITE_NAME = 'DiggSpace';
 // What Indi is, for titles and descriptions that need the Chinese keywords
-export const SITE_TAGLINE = '中文独立博客';
+export const SITE_TAGLINE = '博客、论坛与资讯聚合';
 const TZ = 'Asia/Shanghai';
 const DAY = 86400;
 
@@ -15,7 +15,9 @@ const fTime = new Intl.DateTimeFormat('zh-CN', { timeZone: TZ, hour: '2-digit', 
 const fDate = new Intl.DateTimeFormat('zh-CN', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 const fMonth = new Intl.DateTimeFormat('zh-CN', { timeZone: TZ, month: 'numeric' });
 
-export const categoryName = (id) => CATEGORIES.find(([cid]) => cid === id)?.[1];
+export const categoryName = (id, groups = []) => id.startsWith('sg-')
+  ? groups.find((group) => group.id === id.slice(3))?.name
+  : CATEGORIES.find(([cid]) => cid === id)?.[1];
 // Links to blogs and posts come from feeds and the CSV; only http(s) may become an href
 const safeHref = (url) => (/^https?:\/\//i.test(url ?? '') ? url : '#');
 const iso = (t) => new Date(t * 1000).toISOString();
@@ -123,24 +125,24 @@ const NAV = [
 ];
 
 // Shown when "每小时抓取一次 RSS" is clicked; keep in sync with nextCheckIn in crawl.js
-const CRAWL_DETAILS = '30 天内有更新的博客每小时检查一次，一年内有更新的每 3 小时，更久没更新的每 12 小时。抓取失败时会先照常重试，失败超过一天后逐步降低频率（12 小时、3 天、7 天）；连续 7 天抓不到标记为疑似失效，超过 90 天标记为已失效、每 90 天才检查一次。恢复后自动回到正常节奏。RSS 没有变化时只发一个很小的请求，不会重复下载。';
+const CRAWL_DETAILS = '30 天内有更新的订阅源每小时检查一次，一年内有更新的每 3 小时，更久没更新的每 12 小时。抓取失败时会先照常重试，失败超过一天后逐步降低频率（12 小时、3 天、7 天）；连续 7 天抓不到标记为疑似失效，超过 90 天标记为已失效、每 90 天才检查一次。恢复后自动回到正常节奏。RSS 没有变化时只发一个很小的请求，不会重复下载。';
 
 // GitHub-style "Star | 12.3k" button, drawn here instead of loading a badge
 // image from a third-party service (slow from mainland China)
 const GITHUB_MARK = 'M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z';
 function githubBadge(stars) {
   const count = stars == null ? '' : stars >= 1000 ? `${(stars / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(stars);
-  return html`<a class="gh-badge" href="https://github.com/timqian/chinese-independent-blogs" target="_blank" rel="noopener" title="在 GitHub 上给这个项目点 Star">
+  return html`<a class="gh-badge" href="https://github.com/tenglei87/diggspace" target="_blank" rel="noopener" title="在 GitHub 上给这个项目点 Star">
     <span class="gh-star"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="${GITHUB_MARK}"/></svg>Star</span>${count ? html`<span class="gh-count">${count}</span>` : ''}
   </a>`;
 }
 
 // Category links: in the sidebar on wide screens, and as one scrolling row
 // above the latest list on narrow ones
-function categoryLinks(cat, cls) {
+function categoryLinks(cat, cls, groups = [{ id: 'blogs', name: '独立博客' }]) {
   return html`<nav class="${cls}" aria-label="分类">
     <a href="/latest"${current(cat === '')}>全部</a>
-    ${CATEGORIES.map(([id, name]) => html`<a href="/c/${id}"${current(cat === id)}>${name}</a>`)}
+    ${groups.map(({ id, name }) => html`<a href="/c/sg-${id}"${current(cat === `sg-${id}`)}>${name}</a>`)}
   </nav>`;
 }
 
@@ -178,7 +180,7 @@ ${jsonLd.map(jsonLdScript)}
     <nav class="tabs" aria-label="主导航">
       ${NAV.map(([id, href, label]) => html`<a href="${href}"${current(nav === id)}>${label}</a>`)}
     </nav>
-    <div class="account"><a class="search" href="/blogs" title="搜索博客" aria-label="搜索博客"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></a>${user
+    <div class="account"><a class="search" href="/blogs" title="搜索来源" aria-label="搜索来源"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></a>${user
       ? html`${user.username
         ? html`<a class="inbox" href="/notifications" title="${user.unread ? `${user.unread} 条未读回复` : '消息'}" aria-label="${user.unread ? `${user.unread} 条未读回复` : '消息'}"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>${user.unread ? html`<span class="unread">${user.unread > 99 ? '99+' : user.unread}</span>` : ''}</a>
               <a class="me" href="/u/${user.username}" title="${user.username}" aria-label="${user.username}">${userAvatar(user)}</a>`
@@ -188,12 +190,12 @@ ${jsonLd.map(jsonLdScript)}
   <div class="page">
     <main>${body}</main>
     <aside class="side">
-      ${stats ? html`<p class="stats"><a href="/blogs">收录 <b>${stats.blogs.toLocaleString('en-US')}</b> 个博客</a><br>本周 <b>${stats.weekBlogs}</b> 位博主更新<br>24 小时内 <b>${stats.dayPosts}</b> 篇</p>` : ''}
+      ${stats ? html`<p class="stats"><a href="/blogs">收录 <b>${stats.blogs.toLocaleString('en-US')}</b> 个来源</a><br>本周 <b>${stats.weekBlogs}</b> 个来源更新<br>24 小时内 <b>${stats.dayPosts}</b> 篇</p>` : ''}
       <h2>分类</h2>
-      ${categoryLinks(cat, 'side-cats')}
-      <p class="side-links"><a href="/random" rel="nofollow">随机逛一个博客 →</a></p>
+      ${categoryLinks(cat, 'side-cats', stats?.sourceGroups)}
+      <p class="side-links"><a href="/random" rel="nofollow">随机逛一个网站 →</a></p>
       ${githubBadge(stats?.stars)}
-      <div class="about">${SITE_NAME} 收录中文独立博客，<details class="hint"><summary>每小时检查一次 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>欢迎在 GitHub 上<a href="https://github.com/timqian/chinese-independent-blogs">提交你的博客</a>。</div>
+      <div class="about">${SITE_NAME} 汇聚独立博客、论坛及资讯网站的 RSS 更新，<details class="hint"><summary>定时检查 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>订阅源由本站独立维护。</div>
     </aside>
   </div>
 </div>
@@ -253,7 +255,7 @@ function foldedList(posts, opts) {
 }
 
 export function timelinePage({ site, stats, user, voted, posts, page, hasMore, cat, now }) {
-  const name = cat && categoryName(cat);
+  const name = cat && categoryName(cat, stats?.sourceGroups);
   const base = cat ? `/c/${cat}` : '/latest';
   const path = page > 1 ? `${base}/page/${page}` : base;
   const pageSuffix = page > 1 ? ` · 第 ${page} 页` : '';
@@ -267,7 +269,7 @@ export function timelinePage({ site, stats, user, voted, posts, page, hasMore, c
     jsonLd: name ? [breadcrumbs(site, [[SITE_NAME, '/'], [name, base]])] : [],
     body: html`
       <h1 class="${name ? 'page-title' : 'visually-hidden'}">${name || '最新文章'}</h1>
-      ${categoryLinks(cat || '', 'top-cats')}
+      ${categoryLinks(cat || '', 'top-cats', stats?.sourceGroups)}
       ${posts.length ? foldedList(posts, { now, voted, next: path, showDate: true }) : html`<p class="empty-note">这里还没有文章。</p>`}
       ${pager(base, page, hasMore)}`,
   });
@@ -370,7 +372,7 @@ function blogRow(b, now, following, next, { showFailure = false } = {}) {
   const failingFor = !b.failingSince ? '' : now - b.failingSince < DAY
     ? `${Math.max(1, Math.floor((now - b.failingSince) / 3600))} 小时`
     : `${Math.floor((now - b.failingSince) / DAY)} 天`;
-  return html`<li class="blog" data-search="${search}" data-cats="${b.categories.join(' ')}">${avatar(b)}
+  return html`<li class="blog" data-search="${search}" data-cats="${[...b.categories, `sg-${b.sourceGroup || 'blogs'}`].join(' ')}">${avatar(b)}
     <div class="blog-main"><a class="blog-name" href="/b/${b.num}">${b.name}</a>
       <div class="blog-sub">${host(b.url)}${showFailure && b.failingSince
       ? ` · ${errorReason(b.error)} · 已失败 ${failingFor}`
@@ -384,24 +386,24 @@ export function directoryPage({ site, stats, user, following, blogs, view, now }
   return layout({
     site, stats, user, path,
     title: view === 'all' ? `博客列表 · ${SITE_NAME}` : `博客列表：${label} · ${SITE_NAME}`,
-    description: `${blogs.length} 个中文独立博客，按最近更新排序，附每月发文数量。`,
+    description: `${blogs.length} 个订阅源，按最近更新排序，附每月发文数量。`,
     nav: null,
     noindex: view === 'dead',
     jsonLd: [breadcrumbs(site, [[SITE_NAME, '/'], ['博客列表', '/blogs']])],
     body: html`
       <h1 class="visually-hidden">博客列表</h1>
       <div class="controls">
-        <input type="search" id="q" placeholder="搜索博客名、域名或标签" aria-label="搜索博客">
+        <input type="search" id="q" placeholder="搜索来源名、域名或标签" aria-label="搜索来源">
         <nav class="seg" aria-label="状态">
           ${Object.entries(DIRECTORY_VIEWS).map(([id, [text, href]]) => html`<a href="${href}"${current(id === view)}>${text}</a>`)}
         </nav>
       </div>
       <div class="top-cats always" id="dir-chips">
         <button data-cat="" aria-pressed="true">全部</button>
-        ${CATEGORIES.map(([id, name]) => html`<button data-cat="${id}" aria-pressed="false">${name}</button>`)}
+        ${(stats?.sourceGroups ?? [{ id: 'blogs', name: '独立博客' }]).map(({ id, name }) => html`<button data-cat="sg-${id}" aria-pressed="false">${name}</button>`)}
       </div>
-      <div class="result-count" id="result-count">共 ${blogs.length} 个博客</div>
-      ${view === 'dead' ? html`<p class="list-note">以下博客的 RSS 目前抓取失败，最近失败的在前。连续失败 7 天（RSS 不存在、域名失效等明确错误为 1 天）标记为疑似失效，90 天为已失效。如果你知道正确的 RSS 地址，欢迎<a href="https://github.com/timqian/chinese-independent-blogs/edit/master/blogs-original.csv" target="_blank" rel="noopener">在 GitHub 上修改</a>，合并后一小时内会重新抓取。</p>` : ''}
+      <div class="result-count" id="result-count">共 ${blogs.length} 个来源</div>
+      ${view === 'dead' ? html`<p class="list-note">以下博客的 RSS 目前抓取失败，最近失败的在前。连续失败 7 天（RSS 不存在、域名失效等明确错误为 1 天）标记为疑似失效，90 天为已失效。如发现订阅地址有误，请联系本站管理员更新，下一次抓取时生效。</p>` : ''}
       <ul class="blogs" id="bloglist">${blogs.map((b) => blogRow(b, now, following, path, { showFailure: view === 'dead' }))}</ul>`,
   });
 }

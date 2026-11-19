@@ -1,11 +1,11 @@
-// Check blogs-original.csv before a PR is merged.
+// Validate the independently bundled initial catalog before merge.
 //
 // Usage: node scripts/lint.mjs
 //
 // Exits with status 1 and prints the first problem found.
 import { readFileSync } from 'node:fs';
 
-const CSV_FILE = new URL('../blogs-original.csv', import.meta.url);
+const CSV_FILE = new URL('../data/initial-blogs.csv', import.meta.url);
 const COLUMNS = ['Introduction', 'Address', 'RSS feed', 'tags'];
 
 class LintError extends Error {}
@@ -76,7 +76,7 @@ function lint(text) {
 
 try {
   const rows = lint(readFileSync(CSV_FILE, 'utf-8'));
-  console.log(`blogs-original.csv: ${rows} rows OK`);
+  console.log(`data/initial-blogs.csv: ${rows} rows OK`);
 } catch (err) {
   if (!(err instanceof LintError)) throw err;
   console.error(`Error: ${err.message}`);

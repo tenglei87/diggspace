@@ -2,9 +2,10 @@
 // sitemap, API, favicons and the hourly crawl. Static files in ../public (style.css, app.js, favicon.svg) are
 // served by Workers Static Assets before this code runs.
 import { Hono } from 'hono';
-import blogsCsv from '../../blogs-original.csv';
+import initialBlogsCsv from '../../data/initial-blogs.csv';
 import { originCheck, registerAuthRoutes, requireUser, sessionMiddleware } from './auth.js';
 import { buildSnapshot, crawlFavicons, crawlFeeds, repoStars, syncBlogs } from './crawl.js';
+import { registerFeedspaceAdminRoutes } from './feedspace-admin.js';
 import { announceNewBlogs, announceWeeklyTop, describeChat, telegramEnabled } from './telegram.js';
 import { hotPosts, registerDiscussRoutes, votedIds } from './discuss.js';
 import { blockedBlogsPage, blogFollowersPage, blogPage, categoryName, directoryPage, discussionsPage, errorPage, followingBlogsPage, followingOpml, followingPage, hotPage, notificationsPage, postPage, sitemap, timelinePage, userFollowingPage, userPage, userUpvotedPage } from './views.js';
@@ -35,7 +36,7 @@ async function getMeta(db, key) {
 
 // Snapshot blogs use short keys to keep the stored JSON small
 const fromSnapshot = (b) => ({
-  id: b.id, num: b.num, name: b.n, url: b.u, feed: b.f, tags: b.tags, categories: b.c,
+  id: b.id, num: b.num, name: b.n, url: b.u, feed: b.f, tags: b.tags, categories: b.c, sourceGroup: b.g || 'blogs',
   dead: b.dead, gone: b.gone, failingSince: b.fs, error: b.err, last: b.last, monthly: b.m, icon: b.i,
 });
 
@@ -52,12 +53,12 @@ async function latestPosts(db, { cat = '', limit, offset = 0, userId = null }) {
            b.id AS blog_id, b.num, b.name, b.icon_key
     FROM posts p JOIN blogs b ON b.id = p.blog_id
     WHERE b.removed = 0 AND b.dead_since IS NULL
-      AND (? = '' OR b.categories LIKE ?)
+      AND (? = '' OR b.source_group = ? OR b.categories LIKE ?)
       AND NOT EXISTS (
         SELECT 1 FROM blocked_blogs bb WHERE bb.user_id = ? AND bb.blog_id = b.id
       )
     ORDER BY p.published_at DESC LIMIT ? OFFSET ?`)
-    .bind(cat, `%"${cat}"%`, userId ?? -1, limit, offset).all();
+    .bind(cat, cat.startsWith('sg-') ? cat.slice(3) : null, `%"${cat}"%`, userId ?? -1, limit, offset).all();
   return results.map(toPost);
 }
 
@@ -139,13 +140,22 @@ app.use('*', async (c, next) => {
 app.use('*', sessionMiddleware);
 registerAuthRoutes(app);
 registerDiscussRoutes(app);
+registerFeedspaceAdminRoutes(app, buildSnapshot);
 
 // ---------- pages ----------
 
 async function timeline(c, cat) {
   const page = pageParam(c);
-  const stats = await getMeta(c.env.DB, 'stats');
-  if (!page || (cat && !categoryName(cat))) return notFound(c, stats);
+  let stats = await getMeta(c.env.DB, 'stats');
+  // Fresh installations have source_groups in D1 before the first crawl builds
+  // the stats snapshot. Categories must still render immediately after migration.
+  if (!stats?.sourceGroups) {
+    const { results: sourceGroups } = await c.env.DB.prepare(
+      'SELECT id, name FROM source_groups ORDER BY sort_order, id',
+    ).all();
+    stats = { blogs: 0, weekBlogs: 0, dayPosts: 0, ...stats, sourceGroups };
+  }
+  if (!page || (cat && !categoryName(cat, stats.sourceGroups))) return notFound(c, stats);
   if (c.req.param('n') === '1') return c.redirect(cat ? `/c/${cat}` : '/latest', 301);
   const rows = await latestPosts(c.env.DB, {
     cat, userId: c.get('user')?.id, limit: TIMELINE_PAGE_SIZE + 1, offset: (page - 1) * TIMELINE_PAGE_SIZE,
@@ -450,7 +460,7 @@ app.get('/following.opml', async (c) => {
   if (!c.get('user')) return c.redirect('/login?next=/following');
   return c.body(followingOpml(await followedBlogs(c)), 200, {
     'Content-Type': 'text/x-opml; charset=utf-8',
-    'Content-Disposition': 'attachment; filename="indi-following.opml"',
+    'Content-Disposition': 'attachment; filename="diggspace-following.opml"',
   });
 });
 
@@ -510,9 +520,7 @@ Sitemap: ${siteUrl(c)}/sitemap.xml
 
 // ---------- favicons and API ----------
 
-// Crawl status of every blog, including latest-post metadata.
-// scripts/render-readme.mjs fetches this daily so README.md uses the same
-// data as the website.
+// Public crawl-status data for independently hosted subscription sources.
 app.get('/api/blogs.json', async (c) => {
   const db = c.env.DB;
   const iso = (t) => (t ? new Date(t * 1000).toISOString() : undefined);
@@ -571,28 +579,23 @@ app.on(['GET', 'HEAD'], '/avatars/:id{[0-9]+}', async (c) => {
   return c.body(new Uint8Array(row.data), 200, imageHeaders(row.content_type, 2592000));
 });
 
-// The blog list as merged on GitHub, so accepted PRs take effect within the
-// hour without a redeploy. Falls back to the copy bundled at deploy time
-// (always used locally, where BLOGS_CSV_URL is empty).
-async function blogList(env) {
-  if (!env.BLOGS_CSV_URL) return { csv: blogsCsv, source: 'bundled' };
-  try {
-    const res = await fetch(env.BLOGS_CSV_URL, { headers: { 'User-Agent': 'Indi' }, signal: AbortSignal.timeout(10_000) });
-    const text = res.ok ? await res.text() : '';
-    // Guard against an error page or a broken file wiping the list
-    if (text.startsWith('Introduction,') && text.split('\n').length > 1000) return { csv: text, source: 'github' };
-    console.error(`blog list from GitHub rejected (HTTP ${res.status}, ${text.length} bytes); using bundled copy`);
-  } catch (err) {
-    console.error('blog list from GitHub failed; using bundled copy', err.message);
-  }
-  return { csv: blogsCsv, source: 'bundled' };
+// The independent initial catalog is imported only once per D1 database.
+// After bootstrap, all sources are controlled by DiggSpace administrators.
+// Cron NEVER downloads a source list or reverts manual edits.
+async function ensureInitialCatalog(db) {
+  const imported = await db.prepare("SELECT 1 FROM meta WHERE key = 'initial_catalog_imported'").first();
+  if (imported) return { source: 'database', added: [], skipped: true };
+
+  const result = await syncBlogs(db, initialBlogsCsv);
+  await db.prepare("INSERT OR IGNORE INTO meta (key, value, updated_at) VALUES (?, ?, ?)")
+    .bind('initial_catalog_imported', '1', Math.floor(Date.now() / 1000)).run();
+  return { ...result, source: 'bundled-once', skipped: false };
 }
 
 async function crawl(env, { all = false, limit = FEEDS_PER_RUN, deadline, favicons, onProgress }) {
   const now = Date.now();
-  const list = await blogList(env);
-  const { added, ...syncResult } = await syncBlogs(env.DB, list.csv);
-  const sync = { ...syncResult, added: added.length, source: list.source };
+  const { added, ...syncResult } = await ensureInitialCatalog(env.DB);
+  const sync = { ...syncResult, added: added.length };
   const feeds = await crawlFeeds(env.DB, { all, limit, deadline }, now, onProgress);
   const icons = await crawlFavicons(env.DB, favicons, now, onProgress);
   const snapshot = await buildSnapshot(env.DB, now, { stars: await repoStars(env) });

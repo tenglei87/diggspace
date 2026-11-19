@@ -1,18 +1,17 @@
 {
-  "name": "chinese-independent-blogs",
+  "name": "diggspace",
   "private": true,
-  "description": "中文独立博客列表。The website lives in frontend/.",
+  "description": "DiggSpace — an independent RSS/Atom feed aggregator, derived from MIT-licensed Indi.",
   "scripts": {
     "lint": "node scripts/lint.mjs",
-    "readme": "node scripts/render-readme.mjs",
-    "opml": "node scripts/generate-opml.mjs"
+    "test": "python3 scripts/test_feedspace_schema.py && node scripts/test_independence.mjs"
   },
   "engines": {
     "node": ">=20"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/timqian/chinese-independent-blogs.git"
+    "url": "git+https://github.com/tenglei87/diggspace.git"
   },
-  "license": "ISC"
+  "license": "MIT"
 }

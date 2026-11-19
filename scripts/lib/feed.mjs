@@ -1,9 +1,9 @@
-// Shared helpers for parsing blogs-original.csv and fetching/parsing feeds.
+// Shared helpers for the bundled initial catalog and RSS/Atom fetching.
 // Used by the scripts in this folder (Node) and the website's Worker
 // (frontend/worker), so it must only use web-standard APIs. No dependencies.
 
 export const USER_AGENT =
-  'Mozilla/5.0 (compatible; ChineseIndependentBlogsBot/1.0; +https://github.com/timqian/chinese-independent-blogs)';
+  'Mozilla/5.0 (compatible; DiggSpaceBot/1.0; +https://github.com/tenglei87/diggspace)';
 const TIMEOUT_MS = 20_000;
 // A feed bigger than this is skipped, so one huge (or hostile) response can't
 // exhaust a Worker's 128 MB of memory
@@ -40,7 +40,7 @@ const DAY = 24 * 60 * 60 * 1000;
 // Earlier dates are placeholders like 1970-01-01, not real posts
 const MIN_DATE = Date.UTC(1995, 0, 1);
 
-// Rows of blogs-original.csv as { Introduction, Address, 'RSS feed', tags }.
+// Rows of data/initial-blogs.csv as { Introduction, Address, 'RSS feed', tags }.
 // The file has no quoting (scripts/lint.mjs rejects quotes), so a plain split works.
 export function parseCsvRows(text) {
   const [header, ...lines] = text.trim().split('\n');
