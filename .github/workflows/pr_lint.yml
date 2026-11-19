@@ -1,4 +1,4 @@
-name: Lint metadata and FeedSpace
+name: DiggSpace checks
 
 on:
   pull_request:
@@ -14,17 +14,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check source catalog
+      - name: Check bundled initial catalog
         run: node scripts/lint.mjs
+      - name: Confirm no upstream runtime dependencies
+        run: node scripts/test_independence.mjs
       - name: Check all D1 migrations
         run: python3 scripts/test_feedspace_schema.py
-      - name: Check frontend JS syntax
+      - name: Check Worker and deployment script syntax
         run: |
           node --check frontend/worker/index.js
           node --check frontend/worker/crawl.js
           node --check frontend/worker/views.js
           node --check frontend/worker/feedspace-admin.js
+          node --check frontend/scripts/check-deployment.mjs
+      - name: Ensure placeholder D1 blocks accidental deployment
+        run: |
+          if node frontend/scripts/check-deployment.mjs; then
+            echo "Unsafe: unconfigured deployment was permitted!"
+            exit 1
+          fi
       - name: Install frontend dependencies
         run: npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
-      - name: Check group filters and original layout
+      - name: Check category filters and existing layout
         run: node frontend/scripts/test-feedspace.mjs
