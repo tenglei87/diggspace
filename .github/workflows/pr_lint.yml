@@ -20,6 +20,8 @@ jobs:
         run: node scripts/test_independence.mjs
       - name: Check all D1 migrations
         run: python3 scripts/test_feedspace_schema.py
+      - name: Verify initial catalog imports only once
+        run: node frontend/scripts/test-feedspace-bootstrap.mjs
       - name: Check Worker and deployment script syntax
         run: |
           node --check frontend/worker/index.js
