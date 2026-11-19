@@ -1,14 +1,15 @@
 {
-  "name": "chinese-independent-blogs-site",
+  "name": "diggspace",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
     "dev:remote": "wrangler dev --remote --var CACHE_TTL:0",
-    "db:migrate": "wrangler d1 migrations apply independent-blogs --local",
-    "dev:seed": "wrangler d1 execute independent-blogs --local --file=./scripts/seed-dev.sql",
+    "db:migrate": "wrangler d1 migrations apply diggspace --local",
+    "dev:seed": "wrangler d1 execute diggspace --local --file=./scripts/seed-dev.sql",
     "crawl": "curl -sSN -X POST -H \"Authorization: Bearer local-dev-token\" \"http://localhost:8787/api/admin/crawl?all=1&favicons=all\"",
-    "deploy": "wrangler d1 migrations apply independent-blogs --remote && wrangler deploy"
+    "deploy": "node scripts/check-deployment.mjs && wrangler d1 migrations apply diggspace --remote && wrangler deploy",
+    "check:deploy": "node scripts/check-deployment.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.156.0"
