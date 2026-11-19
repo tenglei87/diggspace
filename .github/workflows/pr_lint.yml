@@ -1,4 +1,4 @@
-name: Lint blogs metadata
+name: Lint metadata and FeedSpace
 
 on:
   pull_request:
@@ -7,9 +7,21 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: 22
-    - name: Lint blogs-original.csv
-      run: node scripts/lint.mjs
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check source catalog
+        run: node scripts/lint.mjs
+      - name: Check all D1 migrations
+        run: python3 scripts/test_feedspace_schema.py
+      - name: Check frontend JS syntax
+        run: |
+          node --check frontend/worker/index.js
+          node --check frontend/worker/crawl.js
+          node --check frontend/worker/views.js
+          node --check frontend/worker/feedspace-admin.js
+      - name: Install frontend dependencies
+        run: npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
+      - name: Check group filters and original layout
+        run: node frontend/scripts/test-feedspace.mjs
