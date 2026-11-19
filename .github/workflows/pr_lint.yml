@@ -37,3 +37,5 @@ jobs:
         run: npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
       - name: Check category filters and existing layout
         run: node frontend/scripts/test-feedspace.mjs
+      - name: Test protected categories and RSS management endpoints
+        run: node frontend/scripts/test-feedspace-admin.mjs
