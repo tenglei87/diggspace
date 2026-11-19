@@ -64,11 +64,11 @@ async function runBatches(db, statements) {
 export async function syncBlogs(db, csvText) {
   const blogs = parseBlogsCsv(csvText);
   const upsert = db.prepare(`
-    INSERT INTO blogs (id, name, url, feed, tags, categories, position, removed, num)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 0, (SELECT COALESCE(MAX(num), 0) + 1 FROM blogs))
+    INSERT INTO blogs (id, name, url, feed, tags, categories, position, removed, num, source_group, source_origin)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 0, (SELECT COALESCE(MAX(num), 0) + 1 FROM blogs), 'blogs', 'csv')
     ON CONFLICT (id) DO UPDATE SET
       name = excluded.name, url = excluded.url, tags = excluded.tags,
-      categories = excluded.categories, position = excluded.position, removed = 0,
+      categories = excluded.categories, position = excluded.position, removed = 0, source_group = 'blogs',
       -- A changed feed URL starts with a clean slate
       status = CASE WHEN blogs.feed IS excluded.feed THEN blogs.status END,
       failing_since = CASE WHEN blogs.feed IS excluded.feed THEN blogs.failing_since END,
@@ -76,8 +76,9 @@ export async function syncBlogs(db, csvText) {
       next_check_at = CASE WHEN blogs.feed IS excluded.feed THEN blogs.next_check_at END,
       etag = CASE WHEN blogs.feed IS excluded.feed THEN blogs.etag END,
       last_modified = CASE WHEN blogs.feed IS excluded.feed THEN blogs.last_modified END,
-      feed = excluded.feed`);
-  const { results: existing } = await db.prepare('SELECT id FROM blogs').all();
+      feed = excluded.feed
+    WHERE blogs.source_origin = 'csv'`);
+  const { results: existing } = await db.prepare("SELECT id FROM blogs WHERE source_origin = 'csv'").all();
   const known = new Set(existing.map((r) => r.id));
   const seen = new Set();
   const statements = [];
@@ -89,7 +90,7 @@ export async function syncBlogs(db, csvText) {
   });
   await runBatches(db, statements);
 
-  const { results } = await db.prepare('SELECT id FROM blogs WHERE removed = 0').all();
+  const { results } = await db.prepare("SELECT id FROM blogs WHERE removed = 0 AND source_origin = 'csv'").all();
   const gone = results.filter((r) => !seen.has(r.id));
   await runBatches(db, gone.map((r) => db.prepare('UPDATE blogs SET removed = 1 WHERE id = ?').bind(r.id)));
   // Only ids never seen before count as new (not blogs that came back)
@@ -97,7 +98,7 @@ export async function syncBlogs(db, csvText) {
   const added = [];
   for (let i = 0; i < fresh.length; i += 50) {
     const ids = fresh.slice(i, i + 50);
-    const { results: rows } = await db.prepare(`SELECT num, name, url FROM blogs WHERE id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all();
+    const { results: rows } = await db.prepare(`SELECT num, name, url FROM blogs WHERE source_origin = 'csv' AND id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all();
     added.push(...rows);
   }
   return { blogs: seen.size, removed: gone.length, added };
@@ -273,6 +274,7 @@ export async function buildSnapshot(db, nowMs = Date.now(), { stars = null } = {
     f: b.feed ?? '',
     tags: JSON.parse(b.tags),
     c: JSON.parse(b.categories),
+    g: b.source_group,
     dead: Boolean(b.dead_since),
     gone: Boolean(b.failing_since && now - b.failing_since >= GONE_AFTER),
     ...(b.failing_since && { fs: b.failing_since, err: b.error || b.status }),
@@ -289,6 +291,8 @@ export async function buildSnapshot(db, nowMs = Date.now(), { stars = null } = {
     dayPosts: recent.filter((p) => now - p.published_at < DAY).length,
     generatedAt: new Date(nowMs).toISOString(),
   };
+  const { results: sourceGroups } = await db.prepare('SELECT id, name FROM source_groups ORDER BY sort_order, id').all();
+  stats.sourceGroups = sourceGroups;
   // Keep the last known star count if GitHub didn't answer this time
   stats.stars = stars ?? JSON.parse((await db.prepare("SELECT value FROM meta WHERE key = 'stats'").first())?.value ?? '{}').stars ?? null;
   const snapshot = JSON.stringify({ generatedAt: new Date(nowMs).toISOString(), blogs });
