@@ -73,7 +73,7 @@ npx wrangler secret put ADMIN_TOKEN
 npm run deploy
 ```
 
-`npm run deploy` 会先调用 `scripts/check-deployment.mjs`，验证 D1 ID 不为空且未引用旧服务，再执行远程迁移并发布 Worker。未设置自定义域名时，可先使用自己账号下的 workers.dev 地址；设置 `SITE_URL` 或 Cloudflare Route 时只能使用已获授权控制的域名。
+**正式域名为 `https://digg.space`。** 建议从 GitHub Actions 的 `Deploy DiggSpace to digg.space (manual)` 手动工作流发布，输入 `BIND_DIGG_SPACE`。该流程在 Actions 临时环境填入新 D1 ID，自动设置 `routes: [{ pattern: 'digg.space', custom_domain: true }]`、`SITE_URL=https://digg.space`，执行迁移后部署。不需要编辑仓库里的数据库占位 ID。请确认根域名的现有 DNS/Worker 状态，以免影响已有网站。首次上线不启用自动抓取或未配置的邮箱登录。
 
 需要配置自己的用户登录渠道：
 
