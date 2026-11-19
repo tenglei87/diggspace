@@ -52,3 +52,13 @@ jobs:
           npm run db:migrate --prefix frontend
           npm run dev:seed --prefix frontend
           node frontend/scripts/test-worker-runtime.mjs
+      - name: Test safe Cloudflare deployment preparation
+        run: node frontend/scripts/test-cloudflare-deploy.mjs
+      - name: Bundle workers.dev preview without account credentials
+        working-directory: frontend
+        env:
+          DIGGSPACE_D1_ID: 11111111-2222-3333-4444-555555555555
+        run: |
+          node scripts/prepare-cloudflare-deployment.mjs
+          node scripts/check-deployment.mjs
+          npx wrangler deploy --dry-run
