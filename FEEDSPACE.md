@@ -99,6 +99,21 @@ node frontend/scripts/test-feedspace.mjs
 
 最后一项依赖先在 `frontend/` 中执行 `npm ci` 安装 `hono`。
 
+
+## GitHub Actions 一键部署（推荐先使用）
+
+不需要预先创建 D1：系统会自动确认账号中是否已有名称为 `diggspace` 的 D1，没有则新建一个，避免重复资源。首次上线仅部署到自己的 `workers.dev`，不启用自动 RSS Cron，也不接入未经验证的邮件域。
+
+1. 在自己的 Cloudflare 账号生成 API Token，并限制权限到对应账号。至少需要 Workers Scripts 编辑及 D1 编辑权限；不要把 Token 放在 README、代码或对话里。
+2. GitHub → Settings → Secrets and variables → Actions，创建 `CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`DIGGSPACE_ADMIN_TOKEN` 三个 Repository secrets。管理员密钥建议使用 64 位随机十六进制字符串。
+3. GitHub → Actions → **Deploy DiggSpace preview (manual)** → Run workflow；选择 `master`，并填写确认文字 `DEPLOY_DIGGSPACE`。
+4. 在 Actions 结果摘要中查看生成的 `workers.dev` URL。该工作流会实际访问首页、分类列表及管理员 API，并验证邮箱登录不会误发/泄露验证码。
+5. 验证完成后再通过管理员 API 触发小批量初始抓取，待有稳定的 RSS 内容后决定是否开启按小时自动抓取。
+
+**注意：** 当前首次预览不会自动导入全部文章（仅在首次 RSS 抓取时把 `data/initial-blogs.csv` 导入 D1）。初次进入站点看到空文章列表属于预期情况。该工作流不在 PR、分支推送时自动部署，也不设置域名、开启 Cloudflare 付费计划或覆盖其他 Worker。
+
+若将来配置正式域名与邮件发信，需要先确认域名和 Cloudflare 邮箱服务，之后单独启用。完整源代码仍保留无效 D1 占位符，真实 ID 仅在临时 CI 运行目录内注入。
+
 ## 限制与安全
 
 - 新来源使用管理员后台添加，不提供公开用户任意提交 URL 的入口。未来如开放，必须对 DNS 和多次重定向路径做 SSRF 防护，限制 IP、端口、超时、内容大小和并发。
