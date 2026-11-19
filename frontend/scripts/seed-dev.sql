@@ -1,5 +1,5 @@
 INSERT OR IGNORE INTO blogs (
-  id, name, url, feed, tags, categories, position, removed, status, num
+  id, name, url, feed, tags, categories, position, removed, status, num, source_group, source_origin
 )
 SELECT
   'local.dev.block-fixture',
@@ -11,7 +11,9 @@ SELECT
   COALESCE(MAX(position), 0) + 1,
   0,
   'ok',
-  COALESCE(MAX(num), 0) + 1
+  COALESCE(MAX(num), 0) + 1,
+  'blogs',
+  'manual'
 FROM blogs
 WHERE 1
 ON CONFLICT (id) DO UPDATE SET
