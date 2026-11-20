@@ -863,6 +863,9 @@ export function sitemap({ site, blogs, discussed, now }) {
   const lines = [
     url('/', now),
     url('/hot', now),
+    url('/ai-hot', now),
+    url('/ai-daily', now),
+    url('/ai-weekly', now),
     url('/discussions', now),
     url('/blogs', now),
     ...CATEGORIES.map(([id]) => url(`/c/${id}`, now)),
