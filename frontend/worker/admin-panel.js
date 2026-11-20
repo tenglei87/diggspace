@@ -61,7 +61,9 @@ const dashboardHtml = page('订阅源管理', `
   <form method="post" action="/admin/logout"><button class="secondary" type="submit">退出登录</button></form>
 </section>
 <section class="panel">
-  <h2 id="form-title">新增订阅源</h2>
+  <div class="list-title"><h2 id="form-title">新增订阅源</h2>
+  <button type="button" id="new-source" class="secondary">＋ 新增另一条订阅源</button></div>
+  <p id="form-mode" class="hint" role="status">新增模式：保存时会创建独立订阅源，不修改已有记录。</p>
   <form id="source-form">
     <input type="hidden" id="editing" value="">
     <div class="fields">
@@ -70,11 +72,11 @@ const dashboardHtml = page('订阅源管理', `
       <label>RSS / Atom 地址<input id="feed-url" name="feed" type="url" required placeholder="https://example.com/feed.xml" /></label>
       <label>内容类型<select id="group-id" name="groupId"><option value="feeds">普通订阅</option></select></label>
     </div>
-    <div class="controls"><button type="submit" id="save">保存来源</button><button type="button" id="cancel" class="secondary" hidden>取消编辑</button></div>
+    <div class="controls"><button type="submit" id="save">新增订阅源</button><button type="button" id="cancel" class="secondary" hidden>取消编辑</button></div>
     <p id="form-message" class="message" aria-live="polite"></p>
   </form>
 </section>
-<section class="panel"><div class="list-title"><h2>已添加的来源</h2>
+<section class="panel"><div class="list-title"><h2>已添加的来源 <small id="source-count" class="hint"></small></h2>
 <button class="secondary" id="refresh" type="button">刷新列表</button></div>
 <p class="hint">停用后不再抓取；删除会隐藏来源和文章，并保留数据以便恢复。</p>
 <div class="table-wrap"><table><thead><tr><th>名称 / 网址</th><th>类型</th><th>状态</th><th>操作</th></tr></thead><tbody id="sources"><tr><td colspan="4">正在加载…</td></tr></tbody></table></div>
