@@ -5,15 +5,36 @@ const get=(path,opts={})=>fetch(site+path,{
   redirect:opts.redirect??'follow',signal:AbortSignal.timeout(15000),
   headers:{'Cache-Control':'no-cache'},
 });
-let response;
-for(let i=0;i<6;i++){
- try{response=await get('/?verify=readonly-news-20261120');
-   if(response.status===200)break;
- }catch{}
- await new Promise(r=>setTimeout(r,1200));
+// Cloudflare may serve the previous Worker version's cached homepage for
+// up to 30 seconds. Each attempt gets a unique cache key and checks the
+// actual expected navigation before considering rollout successful.
+const expectedNav=['最新','热搜','资讯','软件','技术','奇趣','财富','英文'];
+const correctNav=html=>{
+  const navStart=html.indexOf('<nav class="tabs" aria-label="主导航">');
+  if(navStart<0)return false;
+  let previous=navStart;
+  for(const name of expectedNav){
+    const position=html.indexOf('>'+name+'</a>',navStart);
+    if(position<=previous)return false;
+    previous=position;
+  }
+  return true;
+};
+let response,html='';
+for(let i=0;i<12;i++){
+ try{
+   const unique='/\u003fverify=readonly-news-'+
+     (process.env.GITHUB_RUN_ID||'local')+'-'+Date.now()+'-'+i;
+   response=await get(unique);
+   if(response.status===200){
+     html=await response.text();
+     if(correctNav(html))break;
+   }
+ }catch(error){console.warn('Waiting for Worker rollout:',error.message)}
+ await new Promise(r=>setTimeout(r,1500));
 }
 assert.equal(response?.status,200,'homepage responds');
-const html=await response.text();
+assert.ok(correctNav(html),'updated navigation did not propagate after cache-bypassed retries');
 assert.match(html,/<nav class="tabs" aria-label="主导航">/);
 let previous=-1;
 for(const name of ['最新','热搜','资讯','软件','技术','奇趣','财富','英文']){
