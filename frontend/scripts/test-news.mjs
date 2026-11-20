@@ -62,7 +62,7 @@ try {
     feed: 'https://example.org/feed.xml', etag: '"old-revision"',
   }, Date.parse('2026-11-20T03:00:00Z'));
   assert.equal(redirected.status, 'ok');
-  assert.equal(redirected.redirectedTo, 'https://example.net/feed.xml');
+  assert.equal(calls[1].url, 'https://example.net/feed.xml');
   assert.equal(calls.length, 2);
   assert.equal(calls[0].options.headers['If-None-Match'], '"old-revision"');
   assert.equal(calls[1].options.headers['If-None-Match'], undefined);
