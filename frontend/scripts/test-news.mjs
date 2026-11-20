@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { CATEGORIES, FEEDS, CATALOG_VERSION } from '../worker/catalog.js';
 import { parseFeed } from '../../scripts/lib/feed.mjs';
-assert.deepEqual(CATEGORIES.map(c => c.name), ['热搜','资讯','软件','奇趣','财富','英文','技术']);
+assert.deepEqual(CATEGORIES.map(c => c.name), ['热搜','资讯','软件','技术','奇趣','财富','英文']);
 assert.equal(FEEDS.length, 78, 'curated source count');
 assert.equal(new Set(FEEDS.map(s=>s.id)).size, FEEDS.length, 'unique source IDs');
 assert.equal(new Set(FEEDS.map(s=>s.feed)).size, FEEDS.length, 'unique URLs');

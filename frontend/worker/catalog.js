@@ -6,10 +6,10 @@ export const CATEGORIES = Object.freeze([
   { id: "hot", name: "热搜" },
   { id: "news", name: "资讯" },
   { id: "software", name: "软件" },
+  { id: "tech", name: "技术" },
   { id: "fun", name: "奇趣" },
   { id: "money", name: "财富" },
   { id: "english", name: "英文" },
-  { id: "tech", name: "技术" },
 ]);
 export const FEEDS = Object.freeze([
   { id: "r-20c43f0b", category: "hot", name: "知乎热榜", site: "https://plink.anyfeeder.com", feed: "https://plink.anyfeeder.com/zhihu/hotlist" },
