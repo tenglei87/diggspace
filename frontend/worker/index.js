@@ -65,9 +65,6 @@ function shell({ title, category = '', base, content, stats, canonical = '/' }) 
    <a href="https://indi.blog/" target="_blank" rel="noopener noreferrer">Indi · 中文独立博客</a><br>
    <a href="https://aihot.news/" target="_blank" rel="noopener noreferrer">AI新闻资讯</a><br>
    <a href="https://github.com/weekend-project-space/top-rss-list" target="_blank" rel="noopener noreferrer">RSS 来源参考</a></p>
-   <p class="about">所有订阅源由本站代码维护，按固定频率抓取。
-    点击新闻标题即可跳转原站阅读完整文章。</p>
-   ${stats.lastSuccess ? html`<p class="about">上次成功抓取：${shortTime.format(stats.lastSuccess * 1000)}</p>` : ''}
  </aside>
 </div>
 <footer class="footer">DiggSpace · 独立 RSS 内容聚合 · 内容版权归原站所有</footer>
