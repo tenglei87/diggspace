@@ -8,8 +8,6 @@ on:
         description: 'Type IMPORT_2_RSS to import 1609 existing blogs and fetch up to two feeds'
         required: true
         type: string
-  pull_request:
-    types: [opened]
 
 permissions:
   contents: read
@@ -20,16 +18,7 @@ concurrency:
 
 jobs:
   bootstrap:
-    if: >-
-      ${{ (github.event_name == 'workflow_dispatch' &&
-        github.ref == 'refs/heads/master' &&
-        inputs.confirm == 'IMPORT_2_RSS') ||
-        (github.event_name == 'pull_request' &&
-         github.repository == 'tenglei87/diggspace' &&
-         github.event.pull_request.user.login == 'tenglei87' &&
-         github.event.pull_request.head.repo.full_name == 'tenglei87/diggspace' &&
-         github.event.pull_request.base.ref == 'master' &&
-         github.event.pull_request.title == 'DiggSpace RSS pilot 2026-11-20') }}
+    if: ${{ github.ref == 'refs/heads/master' && inputs.confirm == 'IMPORT_2_RSS' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
