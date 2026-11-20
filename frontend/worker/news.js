@@ -54,10 +54,10 @@ export async function crawlNews(db, {
      ORDER BY next_check_at ASC, last_checked_at ASC LIMIT ?`).bind(now, limit).all();
 
   const insert = db.prepare(`INSERT OR IGNORE INTO news_items
-    (source_id, url, title, summary, published_at, first_seen_at)
-    VALUES (?, ?, ?, ?, ?, ?)`);
+    (source_id, url, title, published_at, first_seen_at)
+    VALUES (?, ?, ?, ?, ?)`);
   const mark = db.prepare(`UPDATE news_sources
-    SET last_checked_at = ?, last_ok_at = ?,
+    SET last_checked_at = ?, last_ok_at = COALESCE(?, last_ok_at),
         next_check_at = ?, last_error = ?,
         etag = ?, last_modified = ?
     WHERE id = ?`);
@@ -85,7 +85,7 @@ export async function crawlNews(db, {
         for (const entry of entries) {
           const published = Math.min(now, Math.floor(entry.date.getTime() / 1000));
           statements.push(insert.bind(source.id, entry.url, entry.title.slice(0, 450),
-            entry.summary?.slice(0, 400) || null, published, now));
+            published, now));
           itemsAttempted++;
         }
       }
@@ -125,9 +125,8 @@ export async function warmStart(db, ctx, now = Math.floor(Date.now() / 1000)) {
 
 export async function latestNews(db, category, page, pageSize = 50) {
   const offset = (page - 1) * pageSize;
-  const { results } = await db.prepare(`SELECT i.title, i.url, i.summary,
-     i.published_at, s.name AS source_name, s.id AS source_id,
-     s.category FROM news_items i
+  const { results } = await db.prepare(`SELECT i.title, i.url, i.published_at,
+     s.name AS source_name, s.category FROM news_items i
      JOIN news_sources s ON s.id = i.source_id
      WHERE s.enabled = 1 AND (? = '' OR s.category = ?)
      ORDER BY i.published_at DESC, i.rowid DESC
@@ -150,8 +149,7 @@ export async function sourceStats(db) {
 }
 
 export async function listSources(db) {
-  const { results } = await db.prepare(`SELECT category, name, site_url, feed_url,
-     last_ok_at, last_error
+  const { results } = await db.prepare(`SELECT category, name, feed_url
      FROM news_sources WHERE enabled = 1 ORDER BY category, name`).all();
   return results;
 }
