@@ -184,7 +184,7 @@ ${jsonLd.map(jsonLdScript)}
     <main>${body}</main>
     <aside class="side">
       ${stats ? html`<p class="stats"><a href="/blogs">收录 <b>${stats.blogs.toLocaleString('en-US')}</b> 个来源</a><br>本周 <b>${stats.weekBlogs}</b> 个来源更新<br>24 小时内 <b>${stats.dayPosts}</b> 篇</p>` : ''}
-      <p class="side-links"><a href="https://indi.blog/" target="_blank" rel="noopener noreferrer">Indi · 中文独立博客 ↗</a><br><a href="/random" rel="nofollow">随机逛一个网站 →</a></p>
+      <p class="side-links"><a href="https://indi.blog/" target="_blank" rel="noopener noreferrer">Indi · 中文独立博客 ↗</a><br><a href="/random" rel="nofollow">随机逛一个网站 →</a><br><a href="/admin" rel="nofollow">管理后台</a></p>
       ${githubBadge(stats?.stars)}
       <div class="about">${SITE_NAME} 聚合管理员精选的 RSS 订阅源，<details class="hint"><summary>定时检查 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>订阅源由本站独立维护。</div>
     </aside>
