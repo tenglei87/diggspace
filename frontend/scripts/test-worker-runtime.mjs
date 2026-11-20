@@ -1,191 +1,49 @@
-// End-to-end smoke tests with a real local Wrangler Worker + D1 database.
-// This is not a production network test; no external feeds are fetched.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-
-const frontend = fileURLToPath(new URL('../', import.meta.url));
-const wrangler = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
-const origin = 'http://127.0.0.1:18787';
-const token = 'ci-local-admin-token-0123456789abcdef0123456789';
-const child = spawn(process.execPath, [wrangler, 'dev', '--local', '--port', '18787'], {
-  cwd: frontend,
-  env: { ...process.env, CI: 'true' },
-  stdio: ['ignore', 'pipe', 'pipe'],
+const frontend=fileURLToPath(new URL('../',import.meta.url));
+const wrangler=fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js',import.meta.url));
+const base='http://127.0.0.1:18787';
+const child=spawn(process.execPath,[wrangler,'dev','--local','--port','18787'],{
+  cwd:frontend,env:{...process.env,CI:'true'},stdio:['ignore','pipe','pipe'],
 });
-let output = '';
-const append = (chunk) => { output = (output + chunk.toString()).slice(-16000); };
-child.stdout.on('data', append);
-child.stderr.on('data', append);
-let exited = false;
-child.on('exit', () => { exited = true; });
-
-async function get(path, options) {
-  return fetch(origin + path, { signal: AbortSignal.timeout(5000), ...options });
-}
-
-async function api(method, path, body, authorized = true) {
-  const headers = { ...(authorized ? { Authorization: 'Bearer ' + token } : {}) };
-  if (body != null) headers['Content-Type'] = 'application/json';
-  const response = await get(path, {
-    method,
-    headers,
-    ...(body != null && { body: JSON.stringify(body) }),
-  });
-  const text = await response.text();
-  let data;
-  try { data = JSON.parse(text); } catch { data = { text: text.slice(0, 300) }; }
-  return { status: response.status, data };
-}
-
-async function ready() {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    if (exited) throw Error('Wrangler exited before becoming ready: ' + output);
-    try {
-      const response = await get('/latest');
-      if (response.status === 200) return;
-    } catch { /* worker is starting */ }
-    await new Promise((resolve) => setTimeout(resolve, 300));
-  }
-  throw Error('Wrangler did not respond with HTTP 200: ' + output);
-}
-
-try {
-  await ready();
-  const homepage = await get('/');
-  assert.equal(homepage.status, 200, 'homepage must render directly');
-  const homepageHtml = await homepage.text();
-  assert.match(homepageHtml, /本地测试文章：屏蔽前应显示在最新和最热/,
-    'root displays latest articles already in D1');
-  assert.match(homepageHtml, /<nav class="tabs" aria-label="主导航">/,
-    'blog/forum/news navigation stays in the header');
-  assert.match(homepageHtml, /href="\/discussions"/);
-  assert.match(homepageHtml, /href="\/following"/);
-  assert.match(homepageHtml, /https:\/\/indi\.blog\//);
-  assert.doesNotMatch(homepageHtml, /href="\/c\/sg-blogs"/);
-  assert.doesNotMatch(homepageHtml, /href="\/c\/sg-forum"/);
-  assert.doesNotMatch(homepageHtml, /href="\/c\/sg-news"/);
-  assert.doesNotMatch(homepageHtml, /<h2>分类<\/h2>/,
-    'sidebar category module has been removed');
-  const legacyLatest = await get('/latest', { redirect: 'manual' });
-  assert.equal(legacyLatest.status, 301, '/latest redirects to canonical homepage');
-  assert.equal(legacyLatest.headers.get('location'), '/', '/latest points to homepage');
-  assert.equal((await get('/hot')).status, 200, 'legacy hot ranking remains available');
-  assert.doesNotMatch(homepageHtml, /href="\/ai-(?:hot|daily|weekly)"/);
-  for (const path of ['/ai-hot', '/ai-daily', '/ai-weekly']) {
-    assert.equal((await get(path)).status, 404, path + ' must be removed');
-  }
-
-  assert.equal((await get('/blogs')).status, 200, 'source directory must render');
-  assert.equal((await get('/c/sg-blogs')).status, 404, 'retired blog category is gone');
-  assert.equal((await get('/c/sg-feeds')).status, 200, 'default RSS source category still resolves');
-
-  const unauthorized = await api('GET', '/api/admin/feedspace/groups', null, false);
-  assert.equal(unauthorized.status, 404, 'admin API must not be publicly accessible');
-
-  const groups = await api('GET', '/api/admin/feedspace/groups');
-  assert.equal(groups.status, 200);
-  assert.ok(groups.data.groups.some((g) => g.id === 'feeds'));
-  assert.ok(!groups.data.groups.some((g) => g.id === 'blogs'));
-
-  const anon = await get('/admin', { redirect: 'manual' });
-  assert.equal(anon.status, 302, 'admin requires an authenticated session');
-  assert.equal(anon.headers.get('location'), '/admin/login');
-  assert.equal((await get('/admin/login')).status, 200);
-  const wrong = await get('/admin/login', { method: 'POST',
-    body: new URLSearchParams({ password: 'a'.repeat(40) }),
-    headers: { Origin: origin } });
-  assert.equal(wrong.status, 401);
-  const login = await get('/admin/login', { method: 'POST',
-    body: new URLSearchParams({ password: token }),
-    headers: { Origin: origin }, redirect: 'manual' });
-  assert.equal(login.status, 303);
-  const setCookie = login.headers.get('set-cookie') || '';
-  assert.match(setCookie, /digg_admin=/);
-  assert.match(setCookie, /HttpOnly/i);
-  assert.match(setCookie, /SameSite=Strict/i);
-  const cookie = setCookie.split(';')[0];
-  const dashboard = await get('/admin', { headers: { Cookie: cookie } });
-  assert.equal(dashboard.status, 200);
-  const dashboardHTML = await dashboard.text();
-  assert.match(dashboardHTML, /订阅源管理/);
-  assert.doesNotMatch(dashboardHTML, /ci-local-admin-token-0123456789abcdef0123456789/);
-  const readByCookie = await get('/api/admin/feedspace/groups', { headers: { Cookie: cookie } });
-  assert.equal(readByCookie.status, 200, 'browser session can read management API');
-  const crossSite = await get('/api/admin/feedspace/groups', { method: 'POST',
-    headers: { Cookie: cookie, 'Content-Type': 'application/json', Origin: 'https://attacker.example.com' },
-    body: JSON.stringify({ id: 'crosssite', name: '攻击' }) });
-  assert.equal(crossSite.status, 404, 'cross-origin cookie writes are blocked');
-  const missingOrigin = await get('/api/admin/feedspace/groups', { method: 'POST',
-    headers: { Cookie: cookie, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: 'noorigin', name: '无来源' }) });
-  assert.equal(missingOrigin.status, 404, 'cookie mutations without Origin are blocked');
-
-  const createGroup = await api('POST', '/api/admin/feedspace/groups', {
-    id: 'forum', name: '论坛社区',
-  });
-  assert.equal(createGroup.status, 201, JSON.stringify(createGroup.data));
-
-  const source = await api('POST', '/api/admin/feedspace/sources', {
-    name: '本地接口测试订阅源',
-    url: 'https://forum.example.com/',
-    feed: 'https://forum.example.com/rss.xml',
-    groupId: 'forum',
-  });
-  assert.equal(source.status, 201, JSON.stringify(source.data));
-  assert.ok(Number.isInteger(source.data.num), 'new source returns a stable number');
-
-  // Add a second source via POST. The first must retain its name/URL/feed
-  // rather than being silently reused as the new source.
-  const secondSource = await api('POST', '/api/admin/feedspace/sources', {
-    name: '第二条独立订阅源',
-    url: 'https://design.example.com/',
-    feed: 'https://design.example.com/feed.xml',
-    groupId: 'feeds',
-  });
-  assert.equal(secondSource.status, 201, JSON.stringify(secondSource.data));
-  assert.ok(Number.isInteger(secondSource.data.num));
-  assert.notEqual(secondSource.data.num, source.data.num);
-  assert.notEqual(secondSource.data.id, source.data.id);
-  const preserved = await api('GET', '/api/admin/feedspace/sources?limit=100');
-  assert.equal(preserved.status, 200);
-  const firstRow = preserved.data.sources.find(row => row.num === source.data.num);
-  const secondRow = preserved.data.sources.find(row => row.num === secondSource.data.num);
-  assert.equal(firstRow?.name, '本地接口测试订阅源');
-  assert.equal(firstRow?.feed, 'https://forum.example.com/rss.xml');
-  assert.equal(secondRow?.name, '第二条独立订阅源');
-  assert.equal(secondRow?.feed, 'https://design.example.com/feed.xml');
-
-  assert.equal((await get('/c/sg-forum')).status, 200, 'custom group must render');
-
-  const sources = await api('GET', '/api/admin/feedspace/sources?groupId=forum');
-  assert.equal(sources.status, 200, JSON.stringify(sources.data));
-  assert.equal(sources.data.sources.length, 1);
-  const num = sources.data.sources[0].num;
-  assert.equal(num, source.data.num, 'first source identity unchanged after second add');
-
-  const renamed = await api('PATCH', '/api/admin/feedspace/sources/' + num, {
-    name: '已编辑的测试订阅源',
-  });
-  assert.equal(renamed.status, 200, JSON.stringify(renamed.data));
-
-  const disabled = await api('DELETE', '/api/admin/feedspace/sources/' + num);
-  assert.equal(disabled.status, 200, JSON.stringify(disabled.data));
-
-  const enabled = await api('PATCH', '/api/admin/feedspace/sources/' + num, {
-    enabled: true,
-  });
-  assert.equal(enabled.status, 200, JSON.stringify(enabled.data));
-
-  const finalSources = await api('GET', '/api/admin/feedspace/sources?groupId=forum');
-  assert.equal(finalSources.data.sources[0].removed, 0);
-  assert.equal(finalSources.data.sources[0].name, '已编辑的测试订阅源');
-
-  console.log('PASS: local Wrangler Worker/D1 routes, HTML, authorization, category creation, RSS source CRUD, and snapshot refresh');
-} catch (error) {
-  console.error('Worker/D1 smoke test failed:', error);
-  console.error('Wrangler output:\n', output);
-  process.exitCode = 1;
-} finally {
-  if (!exited) child.kill('SIGTERM');
-}
+let logs='',exited=false;
+child.stdout.on('data',d=>logs=(logs+d.toString()).slice(-10000));
+child.stderr.on('data',d=>logs=(logs+d.toString()).slice(-10000));
+child.on('exit',()=>{exited=true});
+const get=(path,opts={})=>fetch(base+path,{signal:AbortSignal.timeout(10000),...opts});
+try{
+ let ready=false;
+ for(let attempt=0;attempt<100;attempt++){
+  if(exited)throw Error('Wrangler crashed: '+logs);
+  try{const r=await get('/');if(r.status===200){ready=true;break}}catch{}
+  await new Promise(r=>setTimeout(r,300));
+ }
+ assert.ok(ready,'Worker ready: '+logs);
+ const html=await (await get('/')).text();
+ assert.match(html,/本地热搜测试文章/);
+ assert.match(html,/本地资讯测试文章/);
+ assert.match(html,/订阅 <strong>78<\/strong> 个来源/);
+ assert.match(html,/<nav class="tabs" aria-label="主导航">/);
+ for(const name of ['最新','热搜','资讯','软件','奇趣','财富','英文','技术'])
+   assert.match(html,new RegExp(name));
+ for(const term of ['登录','讨论','我的关注','管理后台','AI资讯','AI日报','AI周报'])
+   assert.doesNotMatch(html,new RegExp(term));
+ const hot=await get('/c/hot'); assert.equal(hot.status,200);
+ const hotHtml=await hot.text();
+ assert.match(hotHtml,/本地热搜测试文章/);
+ assert.doesNotMatch(hotHtml,/本地资讯测试文章/);
+ const newsHtml=await (await get('/c/news')).text();
+ assert.match(newsHtml,/本地资讯测试文章/);
+ assert.doesNotMatch(newsHtml,/本地热搜测试文章/);
+ assert.equal((await get('/sources')).status,200);
+ assert.match(await (await get('/sources')).text(),/RSS/);
+ for(const path of ['/admin','/admin/login','/login','/discussions','/following',
+    '/api/admin/feedspace/sources','/vote','/follow','/ai-hot','/ai-daily','/ai-weekly'])
+   assert.equal((await get(path,{redirect:'manual'})).status,404,'removed route '+path);
+ assert.equal((await get('/c/nonexistent')).status,404);
+ assert.equal((await get('/sitemap.xml')).status,200);
+ assert.equal((await get('/latest',{redirect:'manual'})).status,301);
+ console.log('PASS: read-only Worker/D1, 78 feeds, all categories and no account/admin routes');
+}catch(err){console.error(err);console.error('WRANGLER LOGS:\n'+logs);process.exitCode=1}
+finally{if(!exited)child.kill('SIGTERM')}
