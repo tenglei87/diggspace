@@ -5,7 +5,16 @@ import { categorize } from './categories.js';
 const BASE = '/api/admin/feedspace';
 const GROUP_ID = /^[a-z][a-z0-9_-]{1,31}$/;
 const RESERVED_HOST = /(^localhost$|\.localhost$|\.local$|\.internal$|\.test$|\.invalid$|\.example$|\.onion$|\.nip\.io$|\.sslip\.io$)/i;
-const owns = (c) => !!c.env.ADMIN_TOKEN && c.req.header('Authorization') === 'Bearer ' + c.env.ADMIN_TOKEN;
+import { hasAdminSession } from './admin-panel.js';
+const owns = async (c) => {
+  if (!c.env.ADMIN_TOKEN) return false;
+  if (c.req.header('Authorization') === 'Bearer ' + c.env.ADMIN_TOKEN) return true;
+  if (!await hasAdminSession(c)) return false;
+  // Cookie authentication requires a same-origin Origin for every mutation;
+  // a token-based CLI may continue to call the API without an Origin.
+  return ['GET', 'HEAD'].includes(c.req.method) ||
+    c.req.header('Origin') === new URL(c.req.url).origin;
+};
 const denied = (c) => c.json({ error: 'Not found' }, 404);
 const invalid = (c, why) => c.json({ error: why }, 400);
 const validId = (id) => typeof id === 'string' && GROUP_ID.test(id);
@@ -64,8 +73,9 @@ function sourceChanges(data, partial = false) {
     if (!out.feed) return null;
   }
   if (!partial || Object.hasOwn(data, 'groupId')) {
-    if (!validId(data.groupId)) return null;
-    out.source_group = data.groupId;
+    const groupId = data.groupId ?? (!partial ? 'feeds' : null);
+    if (!validId(groupId) || groupId === 'blogs') return null;
+    out.source_group = groupId;
   }
   if (Object.hasOwn(data, 'tags')) {
     if (!Array.isArray(data.tags) || data.tags.length > 20 ||
@@ -82,19 +92,19 @@ function sourceChanges(data, partial = false) {
 }
 
 export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
-  const authorized = (c) => owns(c) ? null : denied(c);
+  const authorized = async (c) => await owns(c) ? null : denied(c);
   const refresh = (c) => buildSnapshot(c.env.DB, Date.now());
 
   app.get(BASE + '/groups', async (c) => {
-    const no = authorized(c); if (no) return no;
+    const no = await authorized(c); if (no) return no;
     const { results } = await c.env.DB.prepare('SELECT id, name, sort_order FROM source_groups ORDER BY sort_order, id').all();
     return c.json({ groups: results });
   });
 
   app.post(BASE + '/groups', async (c) => {
-    const no = authorized(c); if (no) return no;
+    const no = await authorized(c); if (no) return no;
     const body = await jsonBody(c);
-    if (!validId(body?.id) || !validName(body?.name, 40) ||
+    if (!validId(body?.id) || body.id === 'blogs' || !validName(body?.name, 40) ||
         (body.sortOrder != null && !safeSort(body.sortOrder))) return invalid(c, 'Invalid group');
     const db = c.env.DB;
     if (await db.prepare('SELECT 1 FROM source_groups WHERE id = ?').bind(body.id).first()) {
@@ -107,7 +117,7 @@ export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
   });
 
   app.patch(BASE + '/groups/:id', async (c) => {
-    const no = authorized(c); if (no) return no;
+    const no = await authorized(c); if (no) return no;
     const body = await jsonBody(c);
     if (!body) return invalid(c, 'Invalid JSON');
     const changes = [];
@@ -133,9 +143,9 @@ export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
   });
 
   app.delete(BASE + '/groups/:id', async (c) => {
-    const no = authorized(c); if (no) return no;
+    const no = await authorized(c); if (no) return no;
     const id = c.req.param('id');
-    if (id === 'blogs') return invalid(c, 'Independent blogs is the required default group');
+    if (id === 'feeds') return invalid(c, 'The default RSS group cannot be removed');
     const db = c.env.DB;
     if (await db.prepare('SELECT 1 FROM blogs WHERE source_group = ? LIMIT 1').bind(id).first()) {
       return c.json({ error: 'Move all sources in this group before deleting it' }, 409);
@@ -147,20 +157,20 @@ export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
   });
 
   app.get(BASE + '/sources', async (c) => {
-    const no = authorized(c); if (no) return no;
+    const no = await authorized(c); if (no) return no;
     const group = c.req.query('groupId') || null;
     if (group && !validId(group)) return invalid(c, 'Invalid groupId');
     const limit = Math.min(500, Math.max(1, Number.parseInt(c.req.query('limit') || '100', 10) || 100));
     const offset = Math.max(0, Number.parseInt(c.req.query('offset') || '0', 10) || 0);
     const { results } = await c.env.DB.prepare(
       'SELECT num, id, name, url, feed, tags, source_group, source_origin, removed, status, last_checked_at, last_post_at ' +
-      'FROM blogs WHERE (? IS NULL OR source_group = ?) ORDER BY position DESC, num DESC LIMIT ? OFFSET ?')
+      'FROM blogs WHERE source_origin != \'retired_catalog\' AND (? IS NULL OR source_group = ?) ORDER BY position DESC, num DESC LIMIT ? OFFSET ?')
       .bind(group, group, limit, offset).all();
     return c.json({ sources: results.map((r) => ({ ...r, tags: JSON.parse(r.tags) })) });
   });
 
   app.post(BASE + '/sources', async (c) => {
-    const no = authorized(c); if (no) return no;
+    const no = await authorized(c); if (no) return no;
     const data = sourceChanges(await jsonBody(c));
     if (!data) return invalid(c, 'name, url, feed, and groupId are required');
     const db = c.env.DB;
@@ -183,7 +193,7 @@ export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
   });
 
   app.patch(BASE + '/sources/:num', async (c) => {
-    const no = authorized(c); if (no) return no;
+    const no = await authorized(c); if (no) return no;
     const num = Number(c.req.param('num'));
     if (!Number.isSafeInteger(num) || num < 1) return invalid(c, 'Invalid source number');
     const data = sourceChanges(await jsonBody(c), true);
@@ -215,7 +225,7 @@ export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
 
   // Soft delete preserves the history, follows, and post references.
   app.delete(BASE + '/sources/:num', async (c) => {
-    const no = authorized(c); if (no) return no;
+    const no = await authorized(c); if (no) return no;
     const num = Number(c.req.param('num'));
     if (!Number.isSafeInteger(num) || num < 1) return invalid(c, 'Invalid source number');
     const res = await c.env.DB.prepare("UPDATE blogs SET removed = 1, source_origin = 'manual' WHERE num = ?")
