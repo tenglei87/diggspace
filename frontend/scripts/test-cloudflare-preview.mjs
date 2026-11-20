@@ -48,8 +48,12 @@ for(const [cat,label] of [['hot','热搜'],['news','资讯'],['software','软件
  assert.equal((await get('/c/'+cat)).status,200,'category '+cat);
 }
 assert.match(html,/订阅 <strong>78<\/strong> 个来源/);
+// Article titles and summaries can legitimately contain words such as 讨论,
+// 登录 or AI资讯. Check the actual site header, never the editorial content.
+const header=html.match(/<header class="top">([\s\S]*?)<\/header>/)?.[1] || '';
+assert.ok(header,'top navigation header exists');
 for(const phrase of ['登录','讨论','我的关注','管理后台','AI资讯'])
- assert.doesNotMatch(html,new RegExp(phrase));
+ assert.doesNotMatch(header,new RegExp(phrase),'retired top navigation: '+phrase);
 assert.equal((await get('/sources')).status,200);
 for(const path of ['/admin','/admin/login','/login','/discussions','/following',
  '/api/admin/feedspace/sources','/api/admin/crawl','/ai-hot','/ai-daily','/ai-weekly']){
