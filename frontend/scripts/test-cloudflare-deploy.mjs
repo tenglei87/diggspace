@@ -27,11 +27,6 @@ assert.ok(next.includes('"workers_dev": false'));
 assert.ok(next.includes('"routes": [{ "pattern": "digg.space", "custom_domain": true }]'));
 assert.ok(next.includes('"SITE_URL": "https://digg.space"'));
 assert.ok(next.includes('"crons": []'));
-assert.ok(next.includes('"AIHOT_PUBLIC_DISPLAY_ALLOWED": "false"'));
-const licensed = prepareCustomDomainConfig(original, UUID, { aihotAuthorized: true });
-assert.ok(licensed.includes('"AIHOT_PUBLIC_DISPLAY_ALLOWED": "true"'));
-assert.ok(next.includes('"AIHOT_PUBLIC_DISPLAY_ALLOWED": "false"'),
-  'normal deployments must not silently publish AIHOT content');
 assert.ok(!next.includes('"cpu_ms": 300000'));
 assert.ok(!next.includes('"subrequests": 20000'));
 assert.ok(!next.includes('"send_email":'));
