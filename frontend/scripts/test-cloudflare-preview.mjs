@@ -45,12 +45,33 @@ for(const name of ['最新','热搜','资讯','软件','技术','奇趣','财富
 for(const [cat,label] of [['hot','热搜'],['news','资讯'],['software','软件'],['tech','技术'],
  ['fun','奇趣'],['money','财富'],['english','英文']]){
  assert.match(html,new RegExp('href="/c/'+cat+'"[^>]*>'+label+'</a>'));
- const categoryResult=await get('/c/'+cat+'?verify=external-link-'+Date.now()+'-'+cat);
- assert.equal(categoryResult.status,200,'category '+cat);
- const categoryHTML=await categoryResult.text();
+ // Existing category pages may briefly be served from Cloudflare's former
+ // Worker or cached SSR output after a deployment. Check the actual new
+ // markup, not merely HTTP 200, and retry each category with a unique key.
+ let categoryStatus=0,categoryHTML='',categoryReady=false;
+ for(let attempt=0;attempt<24;attempt++){
+   const unique='/c/'+cat+'?verify=slim-sidebar-'+
+     (process.env.GITHUB_RUN_ID||'local')+'-'+Date.now()+'-'+attempt;
+   try{
+     const categoryResult=await get(unique);
+     categoryStatus=categoryResult.status;
+     if(categoryStatus===200){
+       categoryHTML=await categoryResult.text();
+       categoryReady=!categoryHTML.includes('<div class="section-head">') &&
+         categoryHTML.includes('>AI新闻资讯</a>') &&
+         !categoryHTML.includes('<p class="about">') &&
+         !categoryHTML.includes('上次成功抓取');
+       if(categoryReady)break;
+     }
+   }catch(error){console.warn('Waiting for category '+cat+': '+error.message)}
+   await new Promise(r=>setTimeout(r,1500));
+ }
+ assert.equal(categoryStatus,200,'category '+cat);
+ assert.ok(categoryReady,'new version for category '+cat+' has not propagated');
  assert.doesNotMatch(categoryHTML, /<div class="section-head">/,
    'category '+cat+' should not repeat title and 分类资讯');
  assert.match(categoryHTML, /href="https:\/\/aihot\.news\/"[^>]*>AI新闻资讯<\/a>/);
+ assert.doesNotMatch(categoryHTML, /<p class="about">|上次成功抓取/);
 }
 assert.match(html,/订阅 <strong>78<\/strong> 个来源/);
 assert.match(html, /<a href="https:\/\/aihot\.news\/" target="_blank" rel="noopener noreferrer">AI新闻资讯<\/a>/);
