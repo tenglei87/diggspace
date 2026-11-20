@@ -6,8 +6,10 @@
   let offset = 0;
   const limit = 100;
   let editing = null;
+  let editingSource = null;
   let groups = new Map([['feeds', '普通订阅']]);
   let busy = false;
+  let pendingReset = false;
 
   async function request(path, options = {}) {
     const response = await fetch(path, {
@@ -44,22 +46,27 @@
 
   function clearForm() {
     editing = null;
+    editingSource = null;
     form.reset();
     $('editing').value = '';
     $('form-title').textContent = '新增订阅源';
-    $('save').textContent = '保存来源';
+    $('form-mode').textContent = '新增模式：保存会创建独立订阅源，不会修改现有记录。';
+    $('save').textContent = '新增订阅源';
     $('cancel').hidden = true;
   }
 
   function edit(row) {
     editing = row.num;
+    editingSource = { id: row.id, name: row.name, feed: row.feed, url: row.url };
     $('editing').value = row.num;
     $('feed-name').value = row.name;
     $('site-url').value = row.url;
     $('feed-url').value = row.feed ?? '';
     $('group-id').value = row.source_group || 'feeds';
-    $('form-title').textContent = '编辑来源 #' + row.num;
-    $('save').textContent = '保存修改';
+    $('form-title').textContent = '编辑已有来源 #' + row.num;
+    $('form-mode').textContent = '编辑模式：你正在修改「' + row.name +
+      '」。保存将覆盖这条记录，不会新增来源。如要添加新网站，请点击右上角「＋ 新增另一条订阅源」。';
+    $('save').textContent = '确认修改已有来源';
     $('cancel').hidden = false;
     message.textContent = '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -104,7 +111,10 @@
   }
 
   async function loadSources(reset = false) {
-    if (busy) return;
+    if (busy) {
+      if (reset) pendingReset = true;
+      return;
+    }
     busy = true;
     $('refresh').disabled = true;
     if (reset) { offset = 0; table.replaceChildren(); }
@@ -112,6 +122,7 @@
       const data = await request('/api/admin/feedspace/sources?limit=' + limit + '&offset=' + offset);
       for (const row of data.sources) renderRow(row);
       offset += data.sources.length;
+      $('source-count').textContent = '（已显示 ' + offset + ' 条）';
       if (!offset) {
         const tr = document.createElement('tr');
         const td = cell(tr, '还没有订阅源，请通过上方表单添加。');
@@ -119,7 +130,14 @@
       }
       $('more').hidden = data.sources.length < limit;
     } catch (error) { message.textContent = error.message; }
-    finally { busy = false; $('refresh').disabled = false; }
+    finally {
+      busy = false;
+      $('refresh').disabled = false;
+      if (pendingReset) {
+        pendingReset = false;
+        await loadSources(true);
+      }
+    }
   }
 
   async function loadGroups() {
@@ -148,18 +166,44 @@
       groupId: $('group-id').value,
     };
     try {
-      await request(editing ? '/api/admin/feedspace/sources/' + editing : '/api/admin/feedspace/sources', {
-        method: editing ? 'PATCH' : 'POST',
+      const isEditing = editing !== null;
+      if (isEditing) {
+        const name = editingSource?.name || String(editing);
+        if (!confirm('你正在【编辑已有来源：' + name +
+          '】，并非新增。继续会修改原订阅。\\n如需添加另一条，请取消并点击「＋ 新增另一条订阅源」。')) {
+          message.textContent = '已取消修改。你可以切换到「新增模式」保存为新条目。';
+          return;
+        }
+        data.expectedId = editingSource.id;
+        if (data.feed !== editingSource.feed) {
+          if (!confirm('注意：你修改了原有 RSS 地址！\\n这会把「' +
+            name + '」的订阅地址替换成新的，而不是新增订阅。确定继续？')) {
+            message.textContent = '已取消 RSS 地址替换。';
+            return;
+          }
+          data.allowFeedReplacement = true;
+        }
+      }
+      const response = await request(isEditing
+        ? '/api/admin/feedspace/sources/' + editing : '/api/admin/feedspace/sources', {
+        method: isEditing ? 'PATCH' : 'POST',
         headers: { Origin: location.origin },
         body: JSON.stringify(data),
       });
       clearForm();
-      message.textContent = '已保存。点击「抓取到期 RSS」后，最新文章会出现在首页。';
+      message.textContent = isEditing
+        ? '已有来源修改成功，未新增条目。'
+        : '新增成功（来源编号 #' + response.num + '）。原有订阅未修改。可以继续添加下一条。';
       await loadSources(true);
     } catch (error) { message.textContent = error.message; }
     finally { save.disabled = false; }
   });
   $('cancel').addEventListener('click', clearForm);
+  $('new-source').addEventListener('click', () => {
+    clearForm();
+    message.textContent = '已切换到新增模式，新订阅不会替换已有来源。';
+    $('feed-name').focus();
+  });
   $('refresh').addEventListener('click', () => loadSources(true));
   $('more').addEventListener('click', () => loadSources());
 
