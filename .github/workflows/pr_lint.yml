@@ -28,6 +28,8 @@ jobs:
           node --check frontend/worker/index.js
           node --check frontend/worker/crawl.js
           node --check frontend/worker/views.js
+          node --check frontend/worker/views-aihot.js
+          node --check frontend/worker/aihot.js
           node --check frontend/worker/feedspace-admin.js
           node --check frontend/worker/admin-panel.js
           node --check frontend/public/admin.js
@@ -45,6 +47,8 @@ jobs:
         run: node frontend/scripts/test-feedspace.mjs
       - name: Test protected RSS management endpoints and retired-source exclusion
         run: node frontend/scripts/test-feedspace-admin.mjs
+      - name: Test AIHOT v1 adapters, publication schedule and no-license gate
+        run: node frontend/scripts/test-aihot.mjs
       - name: Smoke-test local Wrangler Worker with real D1 SQL
         run: |
           printf 'ADMIN_TOKEN=ci-local-admin-token-0123456789abcdef0123456789\nCACHE_TTL=0\nEMAIL_DEV_LOG=1\nGITHUB_CLIENT_ID=\n' > frontend/.dev.vars
@@ -55,6 +59,8 @@ jobs:
         run: |
           node frontend/scripts/test-cloudflare-deploy.mjs
           node frontend/scripts/test-deploy-retry.mjs
+      - name: Ensure default AIHOT exposure is disabled
+        run: node -e "if (!require('fs').readFileSync('frontend/wrangler.jsonc','utf8').includes('\"AIHOT_PUBLIC_DISPLAY_ALLOWED\": \"false\"')) process.exit(1)"
       - name: Bundle workers.dev preview without account credentials
         working-directory: frontend
         env:
