@@ -21,7 +21,7 @@ jobs:
           node-version: '22'
       - name: Check isolated read-only architecture
         run: node scripts/test_independence.mjs
-      - name: Validate all 15 D1 migrations
+      - name: Validate 16 D1 migrations and legacy cleanup
         run: python3 scripts/test_feedspace_schema.py
       - name: JavaScript syntax
         run: |

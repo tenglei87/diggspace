@@ -22,7 +22,7 @@
 - 分类目录：`frontend/worker/catalog.js`
 - RSS 同步、抓取、去重和保留期限：`frontend/worker/news.js`
 - 通用 RSS/Atom 解析：`scripts/lib/feed.mjs`
-- Cloudflare D1：迁移 `frontend/migrations/0015_readonly_news.sql`
+- Cloudflare D1：新闻表迁移 `frontend/migrations/0015_readonly_news.sql`；旧数据清理迁移 `0016_drop_retired_legacy.sql`
 - 定时抓取：Cloudflare Cron 每小时第 7 分钟执行，每次处理最多 24 个到期订阅，网络故障自动退避
 - 浏览器不需要 JavaScript、用户凭证或管理员令牌
 
@@ -30,7 +30,7 @@
 
 沿用用户自己 Cloudflare 账户下的 Worker、D1 和域名 digg.space。GitHub Actions 工作流 [Deploy DiggSpace to digg.space](https://github.com/tenglei87/diggspace/actions/workflows/deploy_diggspace.yml) 需要从 `master` 手动输入 `BIND_DIGG_SPACE` 才会发布。仅使用两个 Secrets：`CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`。部署自动应用 D1 新迁移；无需管理员密钥。
 
-先前的 Indi 博客、用户账号、讨论和关注数据仍留在旧 D1 表，**新 Worker 不再读取**。历史迁移必须保留才能支持既有生产数据库，未来可在备份后独立处理物理删除。
+`0016_drop_retired_legacy.sql` 清理已停用的 15 张旧业务表（账号、登录、评论、关注、通知、旧博客/文章及旧缓存），保留 `news_sources`、`news_items`、`news_meta` 与 D1 迁移记录。生产环境运行该迁移前，手动部署工作流先检查 D1 Time Travel 恢复点；若检查失败，自动中止删除。历史迁移 0001–0015 保留在 Git 中，以支持从头创建数据库与验证迁移链。已删除的旧内容只能在 Cloudflare 恢复期限内通过恢复点回滚。
 
 ## 开发
 
