@@ -42,6 +42,10 @@ jobs:
         run: npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
       - name: Audit production npm dependencies for high-severity advisories
         run: npm audit --prefix frontend --omit=dev --audit-level=high
+      - name: Inspect latest dependency integrity and development dependency advisories
+        run: |
+          npm view hono@4.13.19 dist.tarball dist.integrity --json
+          npm audit --prefix frontend --audit-level=high || true
       - name: Test curated feed integrity
         run: node frontend/scripts/test-news.mjs
       - name: Apply real local D1 migrations and seed two article fixtures
