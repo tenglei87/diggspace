@@ -1,5 +1,5 @@
 // DiggSpace native AIHOT UI, reusing the original Indi page layout.
-import { html } from 'hono/html';
+import { html, raw } from 'hono/html';
 import { layout } from './views.js';
 
 const INFO = {
@@ -42,7 +42,7 @@ export function aihotPage({ kind, status, payload, site, path, stats, user }) {
     contents = html`<p class="empty-note">当前数据暂不可用，请通过 <a href="${config.original}" target="_blank" rel="noopener noreferrer">AIHOT 原站</a>阅读。</p>`;
   } else if (kind === 'hot') {
     contents = html`<p class="aihot-muted">AIHOT 当前热点榜，按事件讨论热度排序</p>
-      ${entries(payload.entries, true)}`;
+      ${raw(entries(payload.entries, true))}`;
   } else {
     contents = html`<div class="aihot-report-head">
       <span class="aihot-muted">${payload.issue}</span>
@@ -53,7 +53,7 @@ export function aihotPage({ kind, status, payload, site, path, stats, user }) {
     ${payload.sections.map(section => html`<section class="aihot-section">
       <h3>${section.label}</h3>
       ${section.intro ? html`<p class="aihot-muted">${section.intro}</p>` : ''}
-      ${entries(section.entries, false)}
+      ${raw(entries(section.entries, false))}
     </section>`)}`;
   }
 
