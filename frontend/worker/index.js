@@ -35,7 +35,7 @@ app.use('*', async (c, next) => {
 
 function shell({ title, category = '', base, content, stats, canonical = '/' }) {
   const fullTitle = title === '最新' ? 'DiggSpace · RSS 新闻聚合' : title + ' · DiggSpace';
-  const description = '精选 RSS 新闻：热搜、资讯、软件、奇趣、财富、英文、技术，按时间聚合，直接阅读原文。';
+  const description = '精选 RSS 新闻：热搜、资讯、软件、技术、奇趣、财富、英文，按时间聚合，直接阅读原文。';
   return html`<!doctype html>
 <html lang="zh-CN">
 <head>
