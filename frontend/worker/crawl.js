@@ -1,6 +1,5 @@
 // Crawl feeds into D1 and rebuild the homepage snapshot.
-import { fetchAllFeeds, mapWithConcurrency, parseBlogsCsv } from '../../scripts/lib/feed.mjs';
-import { categorize } from './categories.js';
+import { fetchAllFeeds, mapWithConcurrency } from '../../scripts/lib/feed.mjs';
 import { fetchFavicon, iconKey } from './favicon.js';
 
 const DAY = 24 * 3600;
@@ -57,51 +56,6 @@ async function runBatches(db, statements) {
   for (let i = 0; i < statements.length; i += BATCH_SIZE) {
     await db.batch(statements.slice(i, i + BATCH_SIZE));
   }
-}
-
-// One-time import of the bundled initial blog directory. Never sync again on cron.
-// All imported and manually-created sources are editable in this installation.
-export async function syncBlogs(db, csvText) {
-  const blogs = parseBlogsCsv(csvText);
-  const upsert = db.prepare(`
-    INSERT INTO blogs (id, name, url, feed, tags, categories, position, removed, num, source_group, source_origin)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 0, (SELECT COALESCE(MAX(num), 0) + 1 FROM blogs), 'blogs', 'csv')
-    ON CONFLICT (id) DO UPDATE SET
-      name = excluded.name, url = excluded.url, tags = excluded.tags,
-      categories = excluded.categories, position = excluded.position, removed = 0, source_group = 'blogs',
-      -- A changed feed URL starts with a clean slate
-      status = CASE WHEN blogs.feed IS excluded.feed THEN blogs.status END,
-      failing_since = CASE WHEN blogs.feed IS excluded.feed THEN blogs.failing_since END,
-      dead_since = CASE WHEN blogs.feed IS excluded.feed THEN blogs.dead_since END,
-      next_check_at = CASE WHEN blogs.feed IS excluded.feed THEN blogs.next_check_at END,
-      etag = CASE WHEN blogs.feed IS excluded.feed THEN blogs.etag END,
-      last_modified = CASE WHEN blogs.feed IS excluded.feed THEN blogs.last_modified END,
-      feed = excluded.feed
-    WHERE blogs.source_origin = 'csv'`);
-  const { results: existing } = await db.prepare("SELECT id FROM blogs WHERE source_origin = 'csv'").all();
-  const known = new Set(existing.map((r) => r.id));
-  const seen = new Set();
-  const statements = [];
-  blogs.forEach((b, position) => {
-    // The linter rejects duplicate addresses, but keep the first one just in case
-    if (seen.has(b.id)) return;
-    seen.add(b.id);
-    statements.push(upsert.bind(b.id, b.name, b.url, b.feed || null, JSON.stringify(b.tags), JSON.stringify(categorize(b.tags)), position));
-  });
-  await runBatches(db, statements);
-
-  const { results } = await db.prepare("SELECT id FROM blogs WHERE removed = 0 AND source_origin = 'csv'").all();
-  const gone = results.filter((r) => !seen.has(r.id));
-  await runBatches(db, gone.map((r) => db.prepare('UPDATE blogs SET removed = 1 WHERE id = ?').bind(r.id)));
-  // Only ids never seen before count as new (not blogs that came back)
-  const fresh = [...seen].filter((id) => !known.has(id));
-  const added = [];
-  for (let i = 0; i < fresh.length; i += 50) {
-    const ids = fresh.slice(i, i + 50);
-    const { results: rows } = await db.prepare(`SELECT num, name, url FROM blogs WHERE source_origin = 'csv' AND id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all();
-    added.push(...rows);
-  }
-  return { blogs: seen.size, removed: gone.length, added };
 }
 
 // Fetch the feeds that are due (or every feed with `all`), oldest first, at
