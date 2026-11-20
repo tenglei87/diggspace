@@ -1,6 +1,5 @@
-// Shared helpers for the bundled initial catalog and RSS/Atom fetching.
-// Used by the scripts in this folder (Node) and the website's Worker
-// (frontend/worker), so it must only use web-standard APIs. No dependencies.
+// RSS/Atom parser shared by the Cloudflare Worker and Node tests.
+// Only Web-standard APIs; no extra dependencies.
 
 export const USER_AGENT =
   'Mozilla/5.0 (compatible; DiggSpaceBot/1.0; +https://github.com/tenglei87/diggspace)';
@@ -15,6 +14,7 @@ export async function readTextCapped(res, maxBytes) {
     res.body?.cancel();
     throw Object.assign(new Error(`response larger than ${maxBytes} bytes`), { code: 'TOO_LARGE' });
   }
+  if (!res.body) return '';
   const reader = res.body.getReader();
   const chunks = [];
   let total = 0;
@@ -40,43 +40,19 @@ const DAY = 24 * 60 * 60 * 1000;
 // Earlier dates are placeholders like 1970-01-01, not real posts
 const MIN_DATE = Date.UTC(1995, 0, 1);
 
-// Rows of data/initial-blogs.csv as { Introduction, Address, 'RSS feed', tags }.
-// The file has no quoting (scripts/lint.mjs rejects quotes), so a plain split works.
-export function parseCsvRows(text) {
-  const [header, ...lines] = text.trim().split('\n');
-  const keys = header.split(',').map((s) => s.trim());
-  return lines.filter((line) => line.trim()).map((line) => {
-    const values = line.split(',').map((s) => s.trim());
-    return Object.fromEntries(keys.map((k, i) => [k, values[i] ?? '']));
-  });
-}
-
-export function parseBlogsCsv(text) {
-  return parseCsvRows(text).map((row) => {
-    return {
-      id: blogId(row.Address),
-      name: row.Introduction,
-      url: row.Address,
-      feed: row['RSS feed'],
-      tags: row.tags ? row.tags.split(';').map((t) => t.trim()).filter(Boolean) : [],
-    };
-  });
-}
-
-// Stable identifier for a blog, e.g. "www.ruanyifeng.com/blog"
-export function blogId(address) {
-  try {
-    const u = new URL(address);
-    return (u.host + u.pathname).replace(/\/+$/, '').toLowerCase();
-  } catch {
-    return address.toLowerCase();
-  }
+function safeCodePoint(raw, radix) {
+  const value = Number.parseInt(raw, radix);
+  // Untrusted XML can contain impossible Unicode points or control characters.
+  if (!Number.isInteger(value) || value < 1 || value > 0x10ffff ||
+      (value >= 0xd800 && value <= 0xdfff) ||
+      (value < 32 && ![9, 10, 13].includes(value))) return '\uFFFD';
+  return String.fromCodePoint(value);
 }
 
 function decodeEntities(text) {
   return text
-    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => safeCodePoint(h, 16))
+    .replace(/&#(\d+);/g, (_, d) => safeCodePoint(d, 10))
     .replace(/&quot;/g, '"')
     .replace(/&apos;|&#39;/g, "'")
     .replace(/&lt;/g, '<')
@@ -190,40 +166,76 @@ function classifyError(err) {
   return ['network_error', code ? `${code}: ${message}` : message];
 }
 
-// Fetch and parse one blog's feed.
-// Returns { status, error?, feedType?, entryCount?, entries?, redirectedTo? }
-// Pass `blog.etag` / `blog.last_modified` from a previous response to make a
-// conditional request; an unchanged feed then returns { status: 'not_modified' }.
-export async function fetchFeed(blog, now = Date.now()) {
-  if (!blog.feed) return { status: 'no_rss' };
+// External feeds are fixed in the checked-in catalog, but redirects may still
+// be untrusted. Reject raw IPs, private-looking hosts and URL credentials.
+const MAX_REDIRECTS = 4;
+function safeFeedUrl(raw) {
+  try {
+    const url = new URL(raw);
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (!['https:', 'http:'].includes(url.protocol) || url.username ||
+        url.password || (url.port && !['80', '443'].includes(url.port)) ||
+        !hostname.includes('.') || hostname.startsWith('[') ||
+        /^[0-9.]+$/.test(hostname) ||
+        /(?:^|\.)(?:localhost|local|internal|test|invalid)$/.test(hostname)) return null;
+    return url.href;
+  } catch { return null; }
+}
 
+// Fetch one of the curated RSS sources. No user-supplied URL is accepted.
+// Handle redirects ourselves so a feed cannot silently redirect to an IP or
+// internal host. A single deadline covers the entire redirect chain.
+export async function fetchFeed(source, now = Date.now()) {
+  if (!source.feed) return { status: 'no_rss' };
+  let url = safeFeedUrl(source.feed);
+  if (!url) return { status: 'network_error', error: 'invalid feed URL' };
   let res, text;
   try {
-    res = await fetch(blog.feed, {
-      headers: {
-        'User-Agent': USER_AGENT,
-        Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
-        ...(blog.etag && { 'If-None-Match': blog.etag }),
-        ...(blog.last_modified && { 'If-Modified-Since': blog.last_modified }),
-      },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (res.status === 304) {
-      res.body?.cancel();
-      return { status: 'not_modified' };
+    const signal = AbortSignal.timeout(TIMEOUT_MS);
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      const sameFeed = url === source.feed;
+      res = await fetch(url, {
+        headers: {
+          'User-Agent': USER_AGENT,
+          Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+          ...(sameFeed && source.etag && { 'If-None-Match': source.etag }),
+          ...(sameFeed && source.last_modified && { 'If-Modified-Since': source.last_modified }),
+        },
+        redirect: 'manual',
+        signal,
+      });
+      if ([301, 302, 303, 307, 308].includes(res.status)) {
+        const location = res.headers.get('location');
+        res.body?.cancel();
+        if (!location || hop === MAX_REDIRECTS)
+          return { status: 'http_error', error: 'invalid or excessive feed redirects' };
+        const target = safeFeedUrl(new URL(location, url).href);
+        if (!target || (url.startsWith('https:') && target.startsWith('http:')))
+          return { status: 'http_error', error: 'unsafe feed redirect' };
+        url = target;
+        continue;
+      }
+      if (res.status === 304) {
+        res.body?.cancel();
+        return { status: 'not_modified' };
+      }
+      if (!res.ok) {
+        res.body?.cancel();
+        return { status: 'http_error', error: `HTTP ${res.status}` };
+      }
+      text = await readTextCapped(res, MAX_FEED_BYTES);
+      break;
     }
-    if (!res.ok) {
-      res.body?.cancel();
-      return { status: 'http_error', error: `HTTP ${res.status}` };
-    }
-    text = await readTextCapped(res, MAX_FEED_BYTES);
   } catch (err) {
-    if (err.code === 'TOO_LARGE') return { status: 'not_a_feed', error: 'feed larger than 8 MB' };
+    if (err?.code === 'TOO_LARGE')
+      return { status: 'not_a_feed', error: 'feed larger than 8 MB' };
     const [status, error] = classifyError(err);
-    return { status, error: error.slice(0, 200) };
+    return { status, error: String(error || 'network error').slice(0, 200) };
   }
 
-  const feed = parseFeed(text.trimStart(), res.url, now);
+  let feed;
+  try { feed = parseFeed(text.trimStart(), url, now); }
+  catch { return { status: 'not_a_feed', error: 'malformed feed document' }; }
   if (!feed) return { status: 'not_a_feed', error: 'response is not RSS/Atom' };
   return {
     status: feed.entries.length ? 'ok' : 'no_dates',
@@ -232,41 +244,6 @@ export async function fetchFeed(blog, now = Date.now()) {
     entries: feed.entries,
     etag: res.headers.get('etag'),
     lastModified: res.headers.get('last-modified'),
-    ...(res.url !== blog.feed && { redirectedTo: res.url }),
+    ...(url !== source.feed && { redirectedTo: url }),
   };
-}
-
-export async function mapWithConcurrency(items, limit, fn) {
-  const results = new Array(items.length);
-  let next = 0;
-  let done = 0;
-  async function worker() {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]);
-      if (++done % 100 === 0) console.error(`${done}/${items.length}`);
-    }
-  }
-  await Promise.all(Array.from({ length: limit }, worker));
-  return results;
-}
-
-// Errors worth one more try in the same run: network trouble, rate limiting,
-// and server errors (including Cloudflare's 52x origin errors). Not 404s,
-// certificate errors or 530 (Cloudflare's "domain doesn't resolve").
-const TRANSIENT_HTTP = new Set([429, 500, 502, 503, 504, 520, 521, 522, 523, 524]);
-export function isTransient(result) {
-  if (result.status === 'network_error') return true;
-  return result.status === 'http_error' && TRANSIENT_HTTP.has(parseInt(result.error?.replace('HTTP ', ''), 10));
-}
-
-// Fetch every feed, then retry transient failures once at lower concurrency. Workers only allow 6 requests waiting for headers at a
-// time (extra ones queue while their timeout runs), so pass concurrency: 6 there.
-export async function fetchAllFeeds(blogs, now = Date.now(), { concurrency = 64, retryConcurrency = 8 } = {}) {
-  const results = await mapWithConcurrency(blogs, concurrency, (b) => fetchFeed(b, now));
-  const retryIdx = results.flatMap((r, i) => (isTransient(r) ? [i] : []));
-  console.error(`Retrying ${retryIdx.length} transient errors`);
-  const retried = await mapWithConcurrency(retryIdx.map((i) => blogs[i]), Math.min(retryConcurrency, concurrency), (b) => fetchFeed(b, now));
-  retryIdx.forEach((i, j) => (results[i] = retried[j]));
-  return results;
 }
