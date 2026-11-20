@@ -52,7 +52,22 @@ async function ready() {
 
 try {
   await ready();
-  assert.equal((await get('/')).status, 200, 'homepage must render');
+  const homepage = await get('/');
+  assert.equal(homepage.status, 200, 'homepage must render directly');
+  const homepageHtml = await homepage.text();
+  assert.match(homepageHtml, /本地测试文章：屏蔽前应显示在最新和最热/,
+    'root displays latest articles already in D1');
+  assert.match(homepageHtml, /<nav class="tabs" aria-label="主导航">/,
+    'blog/forum/news navigation stays in the header');
+  assert.match(homepageHtml, /href="\/c\/sg-blogs"/);
+  assert.match(homepageHtml, /href="\/c\/sg-forum"/);
+  assert.match(homepageHtml, /href="\/c\/sg-news"/);
+  assert.doesNotMatch(homepageHtml, /<h2>分类<\/h2>/,
+    'sidebar category module has been removed');
+  const legacyLatest = await get('/latest', { redirect: 'manual' });
+  assert.equal(legacyLatest.status, 301, '/latest redirects to canonical homepage');
+  assert.equal(legacyLatest.headers.get('location'), '/', '/latest points to homepage');
+  assert.equal((await get('/hot')).status, 200, 'legacy hot ranking remains available');
   assert.equal((await get('/blogs')).status, 200, 'source directory must render');
   assert.equal((await get('/c/sg-blogs')).status, 200, 'initial blog category must render');
 
