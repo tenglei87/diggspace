@@ -23,6 +23,15 @@ try{
  const html=await (await get('/')).text();
  assert.match(html,/本地热搜测试文章/);
  assert.match(html,/本地资讯测试文章/);
+ assert.doesNotMatch(html, /<script>alert\(1\)<\/script>/, 'RSS headlines must be HTML-escaped');
+ assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/, 'encoded script title should remain visible as text');
+ assert.match(html, /href="#"[^>]*>不安全链接测试<\/a>/, 'disallow javascript: article links');
+ assert.doesNotMatch(html, /href="javascript:/, 'article links must use http(s) only');
+ assert.match((await get('/')).headers.get('content-security-policy') || '', /script-src 'none'/);
+ assert.match((await get('/')).headers.get('permissions-policy') || '', /geolocation=\(\)/);
+ assert.equal((await get('/?page=1e2')).status,404,'reject scientific-notation pagination');
+ assert.equal((await get('/?page=01')).status,404,'reject noncanonical pagination');
+ assert.equal((await get('/page/%0A1',{redirect:'manual'})).status,404,'reject unsafe redirect path');
  assert.match(html,/订阅 <strong>78<\/strong> 个来源/);
  assert.match(html,/<nav class="tabs" aria-label="主导航">/);
  // AIHOT is an external recommendation, not an internal feed category.

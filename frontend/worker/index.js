@@ -7,6 +7,7 @@ import { crawlNews, latestNews, listSources, sourceStats, syncCatalog, warmStart
 
 const app = new Hono();
 const PAGE_SIZE = 50;
+const PAGE_PATTERN = /^(?:[1-9]|[1-9][0-9]|100)$/;
 const NAV = [{ id: '', name: '最新', href: '/' },
   ...CATEGORIES.map(c => ({ ...c, href: '/c/' + c.id }))];
 const labelFor = id => id ? CATEGORIES.find(c => c.id === id)?.name : '最新';
@@ -20,8 +21,8 @@ const validHttp = raw => {
 };
 const siteUrl = c => c.env.SITE_URL || new URL(c.req.url).origin;
 const pageNumber = c => {
-  const value = Number(c.req.query('page') || 1);
-  return Number.isSafeInteger(value) && value > 0 && value <= 100 ? value : null;
+  const raw = c.req.query('page') ?? '1';
+  return PAGE_PATTERN.test(raw) ? Number(raw) : null;
 };
 
 app.use('*', async (c, next) => {
@@ -29,6 +30,10 @@ app.use('*', async (c, next) => {
   c.header('X-Content-Type-Options', 'nosniff');
   c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   c.header('X-Frame-Options', 'DENY');
+  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  c.header('Cross-Origin-Opener-Policy', 'same-origin');
+  if (new URL(c.req.url).protocol === 'https:')
+    c.header('Strict-Transport-Security', 'max-age=31536000');
   c.header('Content-Security-Policy',
     "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
 });
@@ -118,7 +123,10 @@ app.get('/', c => renderTimeline(c));
 app.get('/c/:category', c => renderTimeline(c, c.req.param('category')));
 app.get('/latest', c => c.redirect('/', 301));
 app.get('/hot', c => c.redirect('/c/hot', 301));
-app.get('/page/:page', c => c.redirect('/?page=' + c.req.param('page'), 301));
+app.get('/page/:page', c => {
+  const page = c.req.param('page');
+  return PAGE_PATTERN.test(page) ? c.redirect('/?page=' + page, 301) : c.notFound();
+});
 
 app.get('/sources', async c => {
   await syncCatalog(c.env.DB);

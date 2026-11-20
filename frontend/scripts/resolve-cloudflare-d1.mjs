@@ -1,5 +1,5 @@
-// Idempotently provision ONLY the "diggspace" D1 database in the account
-// selected by the operator's CLOUDFLARE_ACCOUNT_ID token.
+// Resolve ONLY an existing "diggspace" D1 database in the selected account.
+// Never provision a new empty database during production deployment.
 import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +20,13 @@ export function resolveDiggspaceD1(databases) {
   return uuid;
 }
 
+export function requireExistingDiggspaceD1(databases) {
+  const id = resolveDiggspaceD1(databases);
+  if (!id) throw new Error('Existing diggspace D1 not found; aborting deployment. ' +
+    'Check Cloudflare account and restore the original D1 binding before publishing.');
+  return id;
+}
+
 function listD1() {
   const result = execFileSync(process.execPath, [cli, 'd1', 'list', '--json'], {
     encoding: 'utf8', timeout: 90_000, maxBuffer: 5 * 1024 * 1024,
@@ -36,19 +43,8 @@ function main() {
       !process.env.GITHUB_ENV) {
     throw new Error('Missing GitHub Actions Cloudflare credentials or GITHUB_ENV');
   }
-  let id = resolveDiggspaceD1(listD1());
-  if (!id) {
-    console.log('No diggspace D1 found in selected account; creating one');
-    execFileSync(process.execPath, [cli, 'd1', 'create', 'diggspace'], {
-      stdio: 'inherit', timeout: 120_000,
-    });
-    for (let i = 0; i < 5 && !id; i++) {
-      id = resolveDiggspaceD1(listD1());
-    }
-    if (!id) throw new Error('Created D1 did not appear in account listing; check Cloudflare D1');
-  } else {
-    console.log('Reusing the diggspace D1 in the selected Cloudflare account');
-  }
+  const id = requireExistingDiggspaceD1(listD1());
+  console.log('Using the existing diggspace D1 in the selected Cloudflare account');
   appendFileSync(process.env.GITHUB_ENV, 'DIGGSPACE_D1_ID=' + id + '\n');
   console.log('D1 binding prepared for this Actions run (no ID committed to GitHub)');
 }

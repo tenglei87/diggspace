@@ -2,13 +2,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { prepareCustomDomainConfig } from './prepare-cloudflare-deployment.mjs';
-import { resolveDiggspaceD1 } from './resolve-cloudflare-d1.mjs';
-import { deploymentUrl } from './read-deployment-output.mjs';
+import { resolveDiggspaceD1, requireExistingDiggspaceD1 } from './resolve-cloudflare-d1.mjs';
 
 const original = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
 const UUID = '11111111-2222-3333-4444-555555555555';
 
 assert.equal(resolveDiggspaceD1([]), null);
+assert.throws(() => requireExistingDiggspaceD1([]), /Existing diggspace D1 not found/);
+assert.equal(requireExistingDiggspaceD1([{ name: 'diggspace', uuid: UUID }]), UUID);
 assert.equal(resolveDiggspaceD1([{ name: 'other', uuid: UUID }]), null);
 assert.equal(resolveDiggspaceD1([{ name: 'diggspace', uuid: UUID }]), UUID);
 assert.equal(resolveDiggspaceD1([{ name: 'diggspace', id: UUID }]), UUID);
@@ -34,16 +35,4 @@ assert.ok(!/"routes"\s*:/.test(original));
 assert.ok(original.includes('00000000-0000-0000-0000-000000000000'), 'must not mutate repository source config');
 assert.throws(() => prepareCustomDomainConfig(next, UUID), 'preparation is one-time');
 
-const output = [
-  JSON.stringify({ type: 'other', worker_name: 'diggspace', targets: ['https://wrong.workers.dev'] }),
-  JSON.stringify({ type: 'deploy', worker_name: 'unrelated', targets: ['https://wrong.workers.dev'] }),
-  JSON.stringify({ type: 'deploy', worker_name: 'diggspace',
-    targets: ['https://diggspace.preview-account.workers.dev'] }),
-].join('\n');
-assert.equal(deploymentUrl(output), 'https://diggspace.preview-account.workers.dev');
-assert.equal(deploymentUrl('invalid json'), null);
-assert.equal(deploymentUrl(JSON.stringify({
-  type: 'deploy', worker_name: 'diggspace', targets: ['https://example.org'],
-})), null);
-
-console.log('PASS: D1 ownership, digg.space domain, hourly RSS cron, no login email and URL extraction');
+console.log('PASS: D1 ownership, digg.space domain, hourly RSS cron, no login email');

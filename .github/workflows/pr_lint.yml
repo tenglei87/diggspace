@@ -15,8 +15,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
       - name: Check isolated read-only architecture
@@ -25,6 +25,7 @@ jobs:
         run: python3 scripts/test_feedspace_schema.py
       - name: JavaScript syntax
         run: |
+          node --check scripts/lib/feed.mjs
           node --check frontend/worker/index.js
           node --check frontend/worker/catalog.js
           node --check frontend/worker/news.js
@@ -39,6 +40,8 @@ jobs:
           fi
       - name: Install Worker dependencies
         run: npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
+      - name: Audit all npm dependencies for high-severity advisories
+        run: npm audit --prefix frontend --audit-level=high
       - name: Test curated feed integrity
         run: node frontend/scripts/test-news.mjs
       - name: Apply real local D1 migrations and seed two article fixtures
