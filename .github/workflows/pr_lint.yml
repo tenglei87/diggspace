@@ -34,6 +34,7 @@ jobs:
           node --check frontend/worker/views.js
           node --check frontend/worker/feedspace-admin.js
           node --check frontend/scripts/check-deployment.mjs
+          node --check frontend/scripts/test-cloudflare-preview.mjs
       - name: Ensure placeholder D1 blocks accidental deployment
         run: |
           if node frontend/scripts/check-deployment.mjs; then
