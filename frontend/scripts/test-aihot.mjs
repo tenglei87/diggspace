@@ -54,7 +54,7 @@ class FakeDB {
         },
         run: async () => {
           this.operations++;
-          const kind = params.at(-1);
+          const kind = sql.includes('AND next_at <= ?') ? params[1] : params.at(-1);
           if (sql.startsWith('INSERT OR IGNORE')) {
             if (!this.data.has(params[0])) this.data.set(params[0],
               { payload: null, etag: null, next_at: 0, lock_until: 0, checked_at: 0 });
