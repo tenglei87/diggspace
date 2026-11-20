@@ -2,7 +2,7 @@
 // Read-only; no API key. Usage rights are independent of technical access.
 // External public reuse is disabled until written permission is obtained.
 // This module never exposes a raw API proxy or stores AIHOT data as RSS posts.
-import { aihotPage } from './views.js';
+import { aihotPage } from './views-aihot.js';
 
 export const CHANNELS = Object.freeze({
   hot: {
