@@ -13,7 +13,7 @@ function replaceOnce(text, pattern, replacement, description) {
   return text.replace(pattern, replacement);
 }
 
-export function prepareCustomDomainConfig(source, databaseId) {
+export function prepareCustomDomainConfig(source, databaseId, { aihotAuthorized = false } = {}) {
   if (!UUID.test(databaseId) || databaseId === PLACEHOLDER ||
       databaseId.toLowerCase() === 'b1261162-994b-429e-8447-3a3554a96e9c') {
     throw new Error('Refusing to use a placeholder or upstream D1 database');
@@ -58,6 +58,15 @@ export function prepareCustomDomainConfig(source, databaseId) {
     '"SITE_URL": "https://digg.space"',
     'canonical site URL',
   );
+  // Written approval is required for AIHOT public reuse. This option is
+  // operator-controlled in GitHub Secrets, never a browser or URL parameter.
+  if (aihotAuthorized) {
+    next = replaceOnce(next,
+      /"AIHOT_PUBLIC_DISPLAY_ALLOWED"\s*:\s*"false"/,
+      '"AIHOT_PUBLIC_DISPLAY_ALLOWED": "true"',
+      'AIHOT written-permission gate',
+    );
+  }
   if (!next.includes('"pattern": "digg.space", "custom_domain": true') ||
       !next.includes('"SITE_URL": "https://digg.space"') ||
       /indi\.blog|timqian|chinese-independent-blogs/i.test(next)) {
@@ -68,7 +77,12 @@ export function prepareCustomDomainConfig(source, databaseId) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const id = process.env.DIGGSPACE_D1_ID || '';
-  const preview = prepareCustomDomainConfig(readFileSync(CONFIG, 'utf8'), id);
+  const approved = process.env.AIHOT_WRITTEN_PERMISSION_CONFIRMED === 'YES_WITH_EMAIL_APPROVAL';
+  const preview = prepareCustomDomainConfig(readFileSync(CONFIG, 'utf8'), id, {
+    aihotAuthorized: approved,
+  });
+  console.log('AIHOT public display:', approved ? 'enabled after operator confirmation' : 'disabled');
+
   writeFileSync(CONFIG, preview);
   console.log('Prepared digg.space custom-domain deployment; RSS cron and email sending are disabled');
 }
