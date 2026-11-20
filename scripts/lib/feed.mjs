@@ -193,13 +193,14 @@ function safeFeedUrl(raw) {
 // internal host. A single deadline covers the entire redirect chain.
 export async function fetchFeed(source, now = Date.now()) {
   if (!source.feed) return { status: 'no_rss' };
-  let url = safeFeedUrl(source.feed);
-  if (!url) return { status: 'network_error', error: 'invalid feed URL' };
+  const initialUrl = safeFeedUrl(source.feed);
+  if (!initialUrl) return { status: 'network_error', error: 'invalid feed URL' };
+  let url = initialUrl;
   let res, text;
   try {
     const signal = AbortSignal.timeout(TIMEOUT_MS);
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      const sameFeed = url === source.feed;
+      const sameFeed = url === initialUrl;
       res = await fetch(url, {
         headers: {
           'User-Agent': USER_AGENT,
@@ -245,11 +246,8 @@ export async function fetchFeed(source, now = Date.now()) {
   if (!feed) return { status: 'not_a_feed', error: 'response is not RSS/Atom' };
   return {
     status: feed.entries.length ? 'ok' : 'no_dates',
-    feedType: feed.feedType,
-    entryCount: feed.entryCount,
     entries: feed.entries,
     etag: res.headers.get('etag'),
     lastModified: res.headers.get('last-modified'),
-    ...(url !== source.feed && { redirectedTo: url }),
   };
 }
