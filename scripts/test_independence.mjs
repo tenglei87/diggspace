@@ -15,4 +15,16 @@ if(!cron.includes('"crons": ["7 * * * *"]'))throw Error('Hourly feed cron is req
 if(!cron.includes('00000000-0000-0000-0000-000000000000')||cron.includes('"routes"'))
   throw Error('Default config must not contain real D1 ID or a claimed domain');
 if(existsSync(resolve(root,'data/initial-blogs.csv')))throw Error('Retired Indi blog catalog reintroduced');
+const cleanup=get('frontend/migrations/0016_drop_retired_legacy.sql');
+const legacyTables=[
+  'notifications','comment_votes','votes','blocked_blogs','follows',
+  'avatars','sessions','email_codes','comments','users','posts',
+  'favicons','source_groups','meta','blogs',
+];
+for(const table of legacyTables)
+  if(!cleanup.includes('DROP TABLE IF EXISTS '+table+';'))
+    throw Error('Missing retired table drop: '+table);
+if(/DROP TABLE IF EXISTS news_(sources|items|meta)/.test(cleanup))
+  throw Error('Cleanup must never drop news data');
+
 console.log('PASS: standalone read-only news Worker and code-only feeds, hourly cron, no admin endpoints');
