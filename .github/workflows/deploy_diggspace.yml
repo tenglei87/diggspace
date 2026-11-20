@@ -53,8 +53,6 @@ jobs:
         run: node scripts/resolve-cloudflare-d1.mjs
       - name: Prepare digg.space custom domain (no cron, no email binding)
         working-directory: frontend
-        env:
-          AIHOT_WRITTEN_PERMISSION_CONFIRMED: ${{ secrets.AIHOT_WRITTEN_PERMISSION_CONFIRMED }}
         run: |
           node scripts/prepare-cloudflare-deployment.mjs
           node scripts/check-deployment.mjs
@@ -99,7 +97,6 @@ jobs:
         env:
           DIGGSPACE_URL: https://digg.space
           DIGGSPACE_ADMIN_TOKEN: ${{ secrets.DIGGSPACE_ADMIN_TOKEN }}
-          AIHOT_WRITTEN_PERMISSION_CONFIRMED: ${{ secrets.AIHOT_WRITTEN_PERMISSION_CONFIRMED }}
         run: node scripts/test-cloudflare-preview.mjs
       - name: Deployment summary
         run: |
