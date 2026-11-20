@@ -2,9 +2,8 @@
 // sitemap, API, favicons and the hourly crawl. Static files in ../public (style.css, app.js, favicon.svg) are
 // served by Workers Static Assets before this code runs.
 import { Hono } from 'hono';
-import initialBlogsCsv from '../../data/initial-blogs.csv';
 import { originCheck, registerAuthRoutes, requireUser, sessionMiddleware } from './auth.js';
-import { buildSnapshot, crawlFavicons, crawlFeeds, repoStars, syncBlogs } from './crawl.js';
+import { buildSnapshot, crawlFavicons, crawlFeeds, repoStars } from './crawl.js';
 import { registerFeedspaceAdminRoutes } from './feedspace-admin.js';
 import { announceNewBlogs, announceWeeklyTop, describeChat, telegramEnabled } from './telegram.js';
 import { hotPosts, registerDiscussRoutes, votedIds } from './discuss.js';
@@ -581,29 +580,12 @@ app.on(['GET', 'HEAD'], '/avatars/:id{[0-9]+}', async (c) => {
   return c.body(new Uint8Array(row.data), 200, imageHeaders(row.content_type, 2592000));
 });
 
-// The independent initial catalog is imported only once per D1 database.
-// After bootstrap, all sources are controlled by DiggSpace administrators.
-// Cron NEVER downloads a source list or reverts manual edits.
-async function ensureInitialCatalog(db) {
-  const imported = await db.prepare("SELECT 1 FROM meta WHERE key = 'initial_catalog_imported'").first();
-  if (imported) return { source: 'database', added: [], skipped: true };
-
-  const result = await syncBlogs(db, initialBlogsCsv);
-  await db.prepare("INSERT OR IGNORE INTO meta (key, value, updated_at) VALUES (?, ?, ?)")
-    .bind('initial_catalog_imported', '1', Math.floor(Date.now() / 1000)).run();
-  return { ...result, source: 'bundled-once', skipped: false };
-}
-
 async function crawl(env, { all = false, limit = FEEDS_PER_RUN, deadline, favicons, onProgress }) {
   const now = Date.now();
-  const { added, ...syncResult } = await ensureInitialCatalog(env.DB);
-  const sync = { ...syncResult, added: added.length };
   const feeds = await crawlFeeds(env.DB, { all, limit, deadline }, now, onProgress);
   const icons = await crawlFavicons(env.DB, favicons, now, onProgress);
   const snapshot = await buildSnapshot(env.DB, now, { stars: await repoStars(env) });
-  // After the snapshot: the blog pages are rendered from it, so the links in the message work
-  await announceNewBlogs(env, added);
-  const result = { all, sync, feeds, icons, snapshot, seconds: Math.round((Date.now() - now) / 1000) };
+  const result = { all, feeds, icons, snapshot, seconds: Math.round((Date.now() - now) / 1000) };
   console.log(JSON.stringify(result));
   return result;
 }
