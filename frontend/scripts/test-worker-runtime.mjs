@@ -32,8 +32,12 @@ try{
    assert.ok(position>previous,'nav order incorrect: '+name);
    previous=position;
  }
+ // News titles can legitimately mention '登录' or '讨论'. Only the header
+ // must be free of removed community and administrator navigation items.
+ const header=html.match(/<header class="top">([\s\S]*?)<\/header>/)?.[1] || '';
+ assert.ok(header,'top navigation header exists');
  for(const term of ['登录','讨论','我的关注','管理后台','AI资讯','AI日报','AI周报'])
-   assert.doesNotMatch(html,new RegExp(term));
+   assert.doesNotMatch(header,new RegExp(term));
  const hot=await get('/c/hot'); assert.equal(hot.status,200);
  const hotHtml=await hot.text();
  assert.match(hotHtml,/本地热搜测试文章/);
