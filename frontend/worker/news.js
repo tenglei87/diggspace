@@ -77,7 +77,7 @@ export async function crawlNews(db, {
       const ok = ['ok', 'not_modified', 'no_dates'].includes(r.status);
       statuses[r.status] = (statuses[r.status] || 0) + 1;
       const interval = source.category === 'hot' ? HOUR : 2 * HOUR;
-      if (r.status === 'ok' && r.feedType !== 'sitemap') {
+      if (r.status === 'ok') {
         const entries = (r.entries || [])
           .filter(e => e.url && e.title?.trim() && e.date instanceof Date &&
             e.date.getTime() / 1000 >= now - LAST_45_DAYS)
