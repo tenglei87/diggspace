@@ -18,6 +18,17 @@ const parsed = parseFeed(rss, 'https://example.org/feed.xml',
 assert.equal(parsed.feedType, 'rss');
 assert.equal(parsed.entries[0].title, '测试 & RSS');
 assert.equal(parsed.entries[0].url, 'https://example.org/a');
+// Deliberately malformed XML with many open items must not trigger quadratic
+// scans, and excessively long source lists must be bounded.
+const malformedXml = '<rss><channel>' + '<item><title>junk</title>'.repeat(20000);
+const malformedItems = parseFeed(malformedXml, 'https://example.org/rss.xml');
+assert.equal(malformedItems.entryCount, 0);
+const manyItems = '<rss><channel>' + '<item><title>x</title><link>https://example.org/x</link>' +
+  '<pubDate>Fri, 20 Nov 2026 02:00:00 GMT</pubDate></item>'.repeat(600) + '</channel></rss>';
+const boundedItems = parseFeed(manyItems, 'https://example.org/rss.xml',
+  Date.parse('2026-11-20T03:00:00Z'));
+assert.equal(boundedItems.entryCount, 500, 'parser must cap resource use');
+
 // Malicious numeric entities must not crash an entire crawl.
 const broken = rss.replace('测试 &amp; RSS', '&#x110000; &#55296; 正常');
 const parsedBroken = parseFeed(broken, 'https://example.org/feed.xml');
