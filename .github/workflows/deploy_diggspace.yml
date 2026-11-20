@@ -8,6 +8,9 @@ on:
         description: 'Type BIND_DIGG_SPACE to publish on https://digg.space'
         required: true
         type: string
+  # Temporary one-time release gate; remove after confirming production.
+  pull_request:
+    types: [opened]
 
 permissions:
   contents: read
@@ -18,12 +21,23 @@ concurrency:
 
 jobs:
   preview:
-    if: ${{ github.ref == 'refs/heads/master' && inputs.confirm == 'BIND_DIGG_SPACE' }}
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/master' &&
+        inputs.confirm == 'BIND_DIGG_SPACE') ||
+        (github.event_name == 'pull_request' &&
+         github.repository == 'tenglei87/diggspace' &&
+         github.event.pull_request.user.login == 'tenglei87' &&
+         github.event.pull_request.head.repo.full_name == 'tenglei87/diggspace' &&
+         github.event.pull_request.base.ref == 'master' &&
+         github.event.pull_request.title == 'DiggSpace homepage release 2026-11-20') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout master
         uses: actions/checkout@v4
+        with:
+          ref: master
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
