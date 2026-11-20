@@ -21,8 +21,8 @@ for(const name of ['最新','热搜','资讯','软件','技术','奇趣','财富
  assert.ok(position>previous,'production nav order incorrect: '+name);
  previous=position;
 }
-for(const [cat,label] of [['hot','热搜'],['news','资讯'],['software','软件'],
- ['fun','奇趣'],['money','财富'],['english','英文'],['tech','技术']]){
+for(const [cat,label] of [['hot','热搜'],['news','资讯'],['software','软件'],['tech','技术'],
+ ['fun','奇趣'],['money','财富'],['english','英文']]){
  assert.match(html,new RegExp('href="/c/'+cat+'"[^>]*>'+label+'</a>'));
  assert.equal((await get('/c/'+cat)).status,200,'category '+cat);
 }
