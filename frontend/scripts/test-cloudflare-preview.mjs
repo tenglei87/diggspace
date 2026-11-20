@@ -32,8 +32,18 @@ async function statusEventually(path, expected) {
   throw new Error('Unexpected HTTP status for ' + path + ': ' + last);
 }
 
-await statusEventually('/', 200);
-for (const path of ['/latest', '/blogs', '/c/sg-blogs']) {
+const homepageResponse = await statusEventually('/', 200);
+const homepageHtml = await homepageResponse.text();
+assert.match(homepageHtml, /<nav class="tabs" aria-label="主导航">/);
+assert.match(homepageHtml, /href="\/c\/sg-blogs"/);
+assert.match(homepageHtml, /href="\/c\/sg-forum"/);
+assert.match(homepageHtml, /href="\/c\/sg-news"/);
+assert.doesNotMatch(homepageHtml, /<h2>分类<\/h2>/, 'sidebar categories must be removed');
+assert.match(homepageHtml, /class="item-title"/, 'homepage must show at least one actual RSS article');
+const latestAlias = await fetch(base + '/latest', { redirect: 'manual', signal: AbortSignal.timeout(15000) });
+assert.equal(latestAlias.status, 301, '/latest redirects to homepage');
+assert.equal(new URL(latestAlias.headers.get('location'), base).pathname, '/');
+for (const path of ['/hot', '/blogs', '/c/sg-blogs', '/c/sg-forum', '/c/sg-news']) {
   assert.equal((await request(path)).status, 200, path + ' should render');
 }
 assert.equal((await request('/api/admin/feedspace/groups')).status, 404,
