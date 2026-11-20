@@ -23,6 +23,11 @@ try{
  const html=await (await get('/')).text();
  assert.match(html,/本地热搜测试文章/);
  assert.match(html,/本地资讯测试文章/);
+ assert.match((await get('/')).headers.get('content-security-policy') || '', /script-src 'none'/);
+ assert.match((await get('/')).headers.get('permissions-policy') || '', /geolocation=\(\)/);
+ assert.equal((await get('/?page=1e2')).status,404,'reject scientific-notation pagination');
+ assert.equal((await get('/?page=01')).status,404,'reject noncanonical pagination');
+ assert.equal((await get('/page/%0A1',{redirect:'manual'})).status,404,'reject unsafe redirect path');
  assert.match(html,/订阅 <strong>78<\/strong> 个来源/);
  assert.match(html,/<nav class="tabs" aria-label="主导航">/);
  // AIHOT is an external recommendation, not an internal feed category.
