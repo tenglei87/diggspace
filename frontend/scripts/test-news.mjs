@@ -23,8 +23,10 @@ assert.equal(parsed.entries[0].url, 'https://example.org/a');
 const malformedXml = '<rss><channel>' + '<item><title>junk</title>'.repeat(20000);
 const malformedItems = parseFeed(malformedXml, 'https://example.org/rss.xml');
 assert.equal(malformedItems.entryCount, 0);
-const manyItems = '<rss><channel>' + '<item><title>x</title><link>https://example.org/x</link>' +
-  '<pubDate>Fri, 20 Nov 2026 02:00:00 GMT</pubDate></item>'.repeat(600) + '</channel></rss>';
+const manyItems = '<rss><channel>' + (
+  '<item><title>x</title><link>https://example.org/x</link>' +
+  '<pubDate>Fri, 20 Nov 2026 02:00:00 GMT</pubDate></item>'
+).repeat(600) + '</channel></rss>';
 const boundedItems = parseFeed(manyItems, 'https://example.org/rss.xml',
   Date.parse('2026-11-20T03:00:00Z'));
 assert.equal(boundedItems.entryCount, 500, 'parser must cap resource use');
