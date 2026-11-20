@@ -101,7 +101,10 @@ jobs:
             if (!r.ok) throw Error("Failed to rebuild public snapshot: " + r.status);
             const summary = await r.json();
             console.log("Refreshed active RSS source snapshot:", summary.blogs);
-            if (summary.blogs !== 0) throw Error("Unexpected active sources after Indi catalog retirement");
+            if (!Number.isInteger(summary.blogs) || summary.blogs < 0)
+              throw Error("Invalid active RSS source count");
+            // The original 1609 sources were retired. Preserve independent
+            // feeds subsequently added through the administrator dashboard.
           '
       - name: Verify digg.space pages and protected admin API
         working-directory: frontend
