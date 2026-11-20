@@ -40,7 +40,12 @@ for (const [path, title] of [
   assert.equal(response.status, 200, 'native AIHOT section ' + path);
   const page = await response.text();
   assert.match(page, new RegExp(title));
-  assert.match(page, /书面授权/, 'public reuse remains disabled without written permission');
+  if (process.env.AIHOT_WRITTEN_PERMISSION_CONFIRMED !== 'YES_WITH_EMAIL_APPROVAL') {
+    assert.match(page, /书面授权/, 'public reuse remains disabled without written permission');
+  } else {
+    assert.doesNotMatch(page, /此栏目已接入 AIHOT.*书面授权/,
+      'authorized public view should no longer show approval gate');
+  }
   assert.match(page, /aihot\.news/, 'AIHOT official links provided');
 }
 assert.doesNotMatch(html, /class="item-title"/,
