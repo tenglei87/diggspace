@@ -96,6 +96,7 @@ jobs:
         env:
           DIGGSPACE_URL: https://digg.space
           DIGGSPACE_ADMIN_TOKEN: ${{ secrets.DIGGSPACE_ADMIN_TOKEN }}
+          AIHOT_WRITTEN_PERMISSION_CONFIRMED: ${{ secrets.AIHOT_WRITTEN_PERMISSION_CONFIRMED }}
         run: node scripts/test-cloudflare-preview.mjs
       - name: Deployment summary
         run: |
