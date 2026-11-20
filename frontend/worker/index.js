@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import { originCheck, registerAuthRoutes, requireUser, sessionMiddleware } from './auth.js';
 import { buildSnapshot, crawlFavicons, crawlFeeds, repoStars } from './crawl.js';
 import { registerFeedspaceAdminRoutes } from './feedspace-admin.js';
+import { hasAdminSession, registerAdminPanelRoutes } from './admin-panel.js';
 import { announceNewBlogs, announceWeeklyTop, describeChat, telegramEnabled } from './telegram.js';
 import { hotPosts, registerDiscussRoutes, votedIds } from './discuss.js';
 import { blockedBlogsPage, blogFollowersPage, blogPage, categoryName, directoryPage, discussionsPage, errorPage, followingBlogsPage, followingOpml, followingPage, hotPage, notificationsPage, postPage, sitemap, timelinePage, userFollowingPage, userPage, userUpvotedPage } from './views.js';
@@ -124,8 +125,8 @@ app.use('*', originCheck);
 app.use('*', async (c, next) => {
   const ttl = parseInt(c.env.CACHE_TTL ?? '300', 10);
   const path = new URL(c.req.url).pathname;
-  const signedIn = /(?:^|;\s*)sid=/.test(c.req.header('Cookie') ?? '');
-  if (c.req.method !== 'GET' || !ttl || signedIn || path.startsWith('/api/admin') || path === '/random' || path.startsWith('/auth/')) return next();
+  const signedIn = /(?:^|;\s*)(?:sid|digg_admin)=/.test(c.req.header('Cookie') ?? '');
+  if (c.req.method !== 'GET' || !ttl || signedIn || path.startsWith('/api/admin') || path.startsWith('/admin') || path === '/random' || path.startsWith('/auth/')) return next();
   const cache = caches.default;
   const hit = await cache.match(c.req.raw);
   if (hit) return hit;
@@ -140,6 +141,7 @@ app.use('*', sessionMiddleware);
 registerAuthRoutes(app);
 registerDiscussRoutes(app);
 registerFeedspaceAdminRoutes(app, buildSnapshot);
+registerAdminPanelRoutes(app);
 
 // ---------- pages ----------
 
@@ -596,9 +598,10 @@ async function crawl(env, { all = false, limit = FEEDS_PER_RUN, deadline, favico
 // Cloudflare drops a request that sends nothing for ~100 seconds, so the
 // response streams one progress line per chunk and ends with the result.
 app.post('/api/admin/crawl', async (c) => {
-  if (!c.env.ADMIN_TOKEN || c.req.header('Authorization') !== `Bearer ${c.env.ADMIN_TOKEN}`) {
-    return c.json({ error: 'Not found' }, 404);
-  }
+  const bearer = c.env.ADMIN_TOKEN && c.req.header('Authorization') === `Bearer ${c.env.ADMIN_TOKEN}`;
+  const cookieAuth = !bearer && await hasAdminSession(c) &&
+    c.req.header('Origin') === new URL(c.req.url).origin;
+  if (!bearer && !cookieAuth) return c.json({ error: 'Not found' }, 404);
   const all = c.req.query('all') === '1';
   const limit = parseInt(c.req.query('limit') ?? '', 10) || undefined;
   const faviconsParam = c.req.query('favicons');
@@ -624,6 +627,16 @@ app.post('/api/admin/crawl', async (c) => {
   })();
   c.executionCtx.waitUntil(job);
   return new Response(readable, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
+});
+
+// Refresh the public directory after a schema migration or source retirement.
+// Keep separate from the crawler: no RSS requests or remote sources are fetched.
+app.post('/api/admin/snapshot', async (c) => {
+  const bearer = c.env.ADMIN_TOKEN && c.req.header('Authorization') === `Bearer ${c.env.ADMIN_TOKEN}`;
+  const cookieAuth = !bearer && await hasAdminSession(c) &&
+    c.req.header('Origin') === new URL(c.req.url).origin;
+  if (!bearer && !cookieAuth) return c.json({ error: 'Not found' }, 404);
+  return c.json(await buildSnapshot(c.env.DB));
 });
 
 // Post the weekly top list now (same as the Monday cron)
