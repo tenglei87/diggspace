@@ -122,6 +122,9 @@ const NAV = [
   ['latest', '/', '最新'],
   ['discussions', '/discussions', '讨论'],
   ['following', '/following', '我的关注'],
+  ['ai-hot', '/ai-hot', 'AI热点'],
+  ['ai-daily', '/ai-daily', 'AI日报'],
+  ['ai-weekly', '/ai-weekly', 'AI周报'],
 ];
 
 // Shown when "每小时抓取一次 RSS" is clicked; keep in sync with nextCheckIn in crawl.js
@@ -163,6 +166,7 @@ ${noindex ? html`<meta name="robots" content="noindex, follow">` : ''}
 <meta name="theme-color" content="#12151b" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
+${nav && nav.startsWith('ai-') ? html`<link rel="stylesheet" href="/aihot.css">` : ''}
 <script src="/app.js" defer></script>
 ${jsonLd.map(jsonLdScript)}
 </head>
