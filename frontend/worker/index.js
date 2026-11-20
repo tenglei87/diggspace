@@ -63,6 +63,7 @@ function shell({ title, category = '', base, content, stats, canonical = '/' }) 
    24 小时收录 <strong>${stats.recent}</strong> 篇文章</p>
    <p class="side-links"><a href="/sources">查看全部订阅源</a><br>
    <a href="https://indi.blog/" target="_blank" rel="noopener noreferrer">Indi · 中文独立博客</a><br>
+   <a href="https://aihot.news/" target="_blank" rel="noopener noreferrer">AI新闻资讯</a><br>
    <a href="https://github.com/weekend-project-space/top-rss-list" target="_blank" rel="noopener noreferrer">RSS 来源参考</a></p>
    <p class="about">所有订阅源由本站代码维护，按固定频率抓取。
     点击新闻标题即可跳转原站阅读完整文章。</p>
@@ -88,11 +89,9 @@ async function renderTimeline(c, category = '') {
   const basePath = category ? '/c/' + category : '/';
   const hrefFor = p => basePath + (p > 1 ? '?page=' + p : '');
   const title = labelFor(category);
-  const content = html`<section class="stream">
-    <div class="section-head">
-      <h1>${title}</h1>
-      <span>${category ? '分类资讯' : '全部新闻 · 按发布时间排序'}</span>
-    </div>
+  // The selected tab already identifies the category. Avoid duplicate
+  // titles/subtitles and start the news list immediately below the navigation.
+  const content = html`<section class="stream news-stream">
     ${data.items.length ? html`<ol class="items">${data.items.map(item => html`<li class="item">
       <span class="av" aria-hidden="true">${Array.from(item.source_name)[0] || '·'}</span>
       <div class="item-main">
