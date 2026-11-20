@@ -260,7 +260,10 @@ export function timelinePage({ site, stats, user, voted, posts, page, hasMore, c
   return layout({
     site, stats, user, title, description, path, cat: cat || '',
     nav: cat && ['sg-blogs', 'sg-forum', 'sg-news'].includes(cat) ? cat : 'latest',
-    jsonLd: name ? [breadcrumbs(site, [[SITE_NAME, '/'], [name, base]])] : [],
+    jsonLd: name ? [breadcrumbs(site, [[SITE_NAME, '/'], [name, base]])] : page === 1
+      ? [{ '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME,
+          alternateName: SITE_TAGLINE, url: `${site}/`, description, inLanguage: 'zh-CN' }]
+      : [],
     body: html`
       <h1 class="${name ? 'page-title' : 'visually-hidden'}">${name || '最新文章'}</h1>
       ${posts.length ? foldedList(posts, { now, voted, next: path, showDate: true }) : html`<p class="empty-note">暂无文章更新，可先在右上角搜索订阅源。</p>`}
@@ -275,9 +278,9 @@ export function hotPage({ site, stats, user, voted, posts, page, hasMore, now, o
   const description = `收录 ${stats?.blogs ?? 1400} 个${SITE_TAGLINE}，用一个简单的算法，帮助你找到值得读的内容。`;
   return layout({
     site, stats, user, path, description,
-    title: page > 1 ? `热门 · 第 ${page} 页 · ${SITE_NAME}` : `${SITE_NAME} · ${SITE_TAGLINE}`,
+    title: page > 1 ? `热门 · 第 ${page} 页 · ${SITE_NAME}` : `热门文章 · ${SITE_NAME}`, 
     nav: 'hot',
-    jsonLd: page === 1 ? [{ '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME, alternateName: SITE_TAGLINE, url: `${site}/`, description, inLanguage: 'zh-CN' }] : [],
+    jsonLd: [breadcrumbs(site, [[SITE_NAME, '/'], ['热门文章', '/hot']])],
     body: html`
       <h1 class="visually-hidden">${SITE_NAME} · ${SITE_TAGLINE}热门文章</h1>
       ${posts.length
@@ -858,7 +861,10 @@ export function sitemap({ site, blogs, discussed, now }) {
   const url = (path, lastmod) => `  <url><loc>${xml(site + path)}</loc>${lastmod ? `<lastmod>${iso(lastmod).slice(0, 10)}</lastmod>` : ''}</url>`;
   const lines = [
     url('/', now),
-    url('/latest', now),
+    url('/hot', now),
+    url('/c/sg-blogs', now),
+    url('/c/sg-forum', now),
+    url('/c/sg-news', now),
     url('/discussions', now),
     url('/blogs', now),
     ...CATEGORIES.map(([id]) => url(`/c/${id}`, now)),
