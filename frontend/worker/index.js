@@ -3,7 +3,7 @@
 import { Hono } from 'hono';
 import { html } from 'hono/html';
 import { CATEGORIES } from './catalog.js';
-import { crawlNews, latestNews, listSources, sourceStats, syncCatalog } from './news.js';
+import { crawlNews, latestNews, listSources, sourceStats, syncCatalog, warmStart } from './news.js';
 
 const app = new Hono();
 const PAGE_SIZE = 50;
@@ -82,6 +82,9 @@ async function renderTimeline(c, category = '') {
     latestNews(c.env.DB, category, page, PAGE_SIZE),
     sourceStats(c.env.DB),
   ]);
+  if (!data.items.length && !stats.lastSuccess) {
+    await warmStart(c.env.DB, c.executionCtx);
+  }
   const basePath = category ? '/c/' + category : '/';
   const hrefFor = p => basePath + (p > 1 ? '?page=' + p : '');
   const title = labelFor(category);
