@@ -104,7 +104,7 @@ export function registerAdminPanelRoutes(app) {
       x => x.toString(16).padStart(2, '0')).join('');
     const body = expires + '.' + nonce;
     setCookie(c, COOKIE, body + '.' + await hmac(secret, body), {
-      httpOnly: true, secure: true, sameSite: 'Strict', path: '/', maxAge: SESSION_SECONDS,
+      httpOnly: true, secure: new URL(c.req.url).protocol === 'https:', sameSite: 'Strict', path: '/', maxAge: SESSION_SECONDS,
     });
     c.header('Cache-Control', 'no-store');
     return c.redirect('/admin', 303);
