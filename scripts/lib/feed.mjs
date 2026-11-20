@@ -68,15 +68,6 @@ export function decodeText(raw) {
     .trim();
 }
 
-// Plain text from an element that holds (usually escaped) HTML, e.g. <description>
-function htmlToText(raw) {
-  let html = raw.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1');
-  if (!/<[a-z]/i.test(html)) html = decodeEntities(html);
-  return decodeEntities(html.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' '))
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 function parseDate(raw, now) {
   const text = decodeText(raw);
   if (!text) return null;
@@ -91,31 +82,23 @@ function parseDate(raw, now) {
   return d;
 }
 
-function entryLink(entry, feedType, baseUrl) {
+function entryLink(entry, baseUrl) {
   let link;
-  if (feedType === 'sitemap') {
-    link = entry.match(/<loc[^>]*>([\s\S]*?)<\/loc>/)?.[1];
-  } else {
-    // Atom style: <link rel="alternate" href="..."/>; skip rel="self" / "edit" etc.
-    for (const [tag] of entry.matchAll(/<link\b[^>]*>/g)) {
-      const href = tag.match(/href=["']([^"']+)["']/)?.[1];
-      const rel = tag.match(/rel=["']([^"']+)["']/)?.[1];
-      if (href && (!rel || rel === 'alternate')) {
-        link = href;
-        break;
-      }
+  // Atom <link href="..." rel="alternate"> or RSS <link>URL</link>.
+  for (const [tag] of entry.matchAll(/<link\b[^>]*>/g)) {
+    const href = tag.match(/href=["']([^"']+)["']/)?.[1];
+    const rel = tag.match(/rel=["']([^"']+)["']/)?.[1];
+    if (href && (!rel || rel.toLowerCase() === 'alternate')) {
+      link = href;
+      break;
     }
-    // RSS style: <link>...</link>
-    link ??= entry.match(/<link[^>]*>([\s\S]*?)<\/link>/)?.[1];
   }
+  link ??= entry.match(/<link[^>]*>([\s\S]*?)<\/link>/)?.[1];
   if (!link) return undefined;
   try {
     const url = new URL(decodeText(link), baseUrl);
-    // Feeds are untrusted: a javascript: or data: link would run script on our site
     return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : undefined;
-  } catch {
-    return undefined;
-  }
+  } catch { return undefined; }
 }
 
 // Returns { feedType, entryCount, entries } or null if the body isn't a feed.
@@ -125,10 +108,9 @@ export function parseFeed(text, baseUrl, now = Date.now()) {
   let feedType;
   if (/<feed[\s>]/.test(head)) feedType = 'atom';
   else if (/<(rss|rdf:RDF)[\s>]/.test(head)) feedType = 'rss';
-  else if (/<urlset[\s>]/.test(head)) feedType = 'sitemap';
   else return null;
 
-  const entryTag = { atom: 'entry', rss: 'item', sitemap: 'url' }[feedType];
+  const entryTag = feedType === 'atom' ? 'entry' : 'item';
   const raw = text.match(new RegExp(`<${entryTag}[\\s>][\\s\\S]*?</${entryTag}>`, 'g')) ?? [];
 
   // Only look at dates inside entries; channel-level dates are often build times.
@@ -146,12 +128,10 @@ export function parseFeed(text, baseUrl, now = Date.now()) {
     const date = latestDate(entry, 'pubDate|published|dc:date|dc:created|issued') ?? latestDate(entry, 'updated|modified|lastmod');
     if (!date) continue;
     const title = entry.match(/<title[^>]*>([\s\S]*?)<\/title>/)?.[1];
-    const body = entry.match(/<(description|summary|content:encoded|content)\b[^>]*>([\s\S]*?)<\/\1>/)?.[2];
     entries.push({
       date,
       title: title ? decodeText(title) : undefined,
-      url: entryLink(entry, feedType, baseUrl),
-      summary: body ? htmlToText(body).slice(0, 200) : undefined,
+      url: entryLink(entry, baseUrl),
     });
   }
   entries.sort((a, b) => b.date - a.date);
@@ -159,9 +139,9 @@ export function parseFeed(text, baseUrl, now = Date.now()) {
 }
 
 function classifyError(err) {
-  if (err.name === 'TimeoutError') return ['network_error', 'timeout'];
-  const code = err.cause?.code ?? err.code ?? '';
-  const message = err.cause?.message ?? err.message;
+  if (err?.name === 'TimeoutError') return ['network_error', 'timeout'];
+  const code = err?.cause?.code ?? err?.code ?? '';
+  const message = err?.cause?.message ?? err?.message;
   if (/CERT|SSL|TLS/.test(code)) return ['ssl_error', `${code}: ${message}`];
   return ['network_error', code ? `${code}: ${message}` : message];
 }
