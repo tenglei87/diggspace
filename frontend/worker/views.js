@@ -6,7 +6,7 @@ import { CATEGORIES } from './categories.js';
 
 export const SITE_NAME = 'DiggSpace';
 // What Indi is, for titles and descriptions that need the Chinese keywords
-export const SITE_TAGLINE = '博客、论坛与资讯聚合';
+export const SITE_TAGLINE = '独立 RSS 资讯与社区内容聚合';
 const TZ = 'Asia/Shanghai';
 const DAY = 86400;
 
@@ -120,9 +120,6 @@ function breadcrumbs(site, items) {
 
 const NAV = [
   ['latest', '/', '最新'],
-  ['sg-blogs', '/c/sg-blogs', '博客'],
-  ['sg-forum', '/c/sg-forum', '论坛'],
-  ['sg-news', '/c/sg-news', '资讯'],
   ['discussions', '/discussions', '讨论'],
   ['following', '/following', '我的关注'],
 ];
@@ -187,9 +184,9 @@ ${jsonLd.map(jsonLdScript)}
     <main>${body}</main>
     <aside class="side">
       ${stats ? html`<p class="stats"><a href="/blogs">收录 <b>${stats.blogs.toLocaleString('en-US')}</b> 个来源</a><br>本周 <b>${stats.weekBlogs}</b> 个来源更新<br>24 小时内 <b>${stats.dayPosts}</b> 篇</p>` : ''}
-      <p class="side-links"><a href="/random" rel="nofollow">随机逛一个网站 →</a></p>
+      <p class="side-links"><a href="https://indi.blog/" target="_blank" rel="noopener noreferrer">Indi · 中文独立博客 ↗</a><br><a href="/random" rel="nofollow">随机逛一个网站 →</a></p>
       ${githubBadge(stats?.stars)}
-      <div class="about">${SITE_NAME} 汇聚独立博客、论坛及资讯网站的 RSS 更新，<details class="hint"><summary>定时检查 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>订阅源由本站独立维护。</div>
+      <div class="about">${SITE_NAME} 聚合管理员精选的 RSS 订阅源，<details class="hint"><summary>定时检查 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>订阅源由本站独立维护。</div>
     </aside>
   </div>
 </div>
@@ -259,7 +256,7 @@ export function timelinePage({ site, stats, user, voted, posts, page, hasMore, c
     : `${stats?.blogs ?? 1400} 个${SITE_TAGLINE}的最新文章，点击直达原博客。`;
   return layout({
     site, stats, user, title, description, path, cat: cat || '',
-    nav: cat && ['sg-blogs', 'sg-forum', 'sg-news'].includes(cat) ? cat : 'latest',
+    nav: 'latest', 
     jsonLd: name ? [breadcrumbs(site, [[SITE_NAME, '/'], [name, base]])] : page === 1
       ? [{ '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME,
           alternateName: SITE_TAGLINE, url: `${site}/`, description, inLanguage: 'zh-CN' }]
@@ -862,9 +859,6 @@ export function sitemap({ site, blogs, discussed, now }) {
   const lines = [
     url('/', now),
     url('/hot', now),
-    url('/c/sg-blogs', now),
-    url('/c/sg-forum', now),
-    url('/c/sg-news', now),
     url('/discussions', now),
     url('/blogs', now),
     ...CATEGORIES.map(([id]) => url(`/c/${id}`, now)),
