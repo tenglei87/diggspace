@@ -6,12 +6,18 @@ import { registerFeedspaceAdminRoutes } from '../worker/feedspace-admin.js';
 
 class FakeD1 {
   constructor() {
-    this.groups = new Map([['blogs', { id: 'blogs', name: '独立博客', sort_order: 0 }]]);
+    this.groups = new Map([['feeds', { id: 'feeds', name: '订阅源', sort_order: 0 }]]);
     this.sources = new Map([
       [1, { num: 1, id: 'existing.example', name: 'Existing blog', url: 'https://existing.example.com/',
         feed: 'https://existing.example.com/feed.xml', tags: '[]', categories: '[]',
-        source_group: 'blogs', source_origin: 'csv', removed: 0 }],
+        source_group: 'feeds', source_origin: 'manual', removed: 0 }],
     ]);
+    // Historical data stays referentially valid but must not be listed.
+    this.sources.set(99, {
+      num: 99, id: 'old-csv.example.com', name: 'Retired Indi subscription',
+      url: 'https://old-csv.example.com', feed: null, tags: '[]', categories: '[]',
+      source_group: 'blogs', source_origin: 'retired_catalog', removed: 1,
+    });
     this.nextNum = 2;
   }
   prepare(sql) {
@@ -60,7 +66,7 @@ class FakeD1 {
       const limit = args[2];
       const offset = args[3];
       const sources = [...this.sources.values()]
-        .filter((row) => !group || row.source_group === group)
+        .filter((row) => row.source_origin !== 'retired_catalog' && (!group || row.source_group === group))
         .sort((a, b) => b.num - a.num);
       return { results: sources.slice(offset, offset + limit).map((r) => ({ ...r })) };
     }
@@ -114,6 +120,7 @@ async function call(method, path, body, token = ADMIN_TOKEN) {
 
 assert.equal((await call('GET', '/groups', null, 'wrong')).status, 404);
 assert.equal((await call('GET', '/groups')).body.groups.length, 1);
+assert.equal((await call('POST', '/groups', { id: 'blogs', name: '独立博客' })).status, 400);
 assert.equal((await call('POST', '/groups', { id: 'forum', name: '论坛社区' })).status, 201);
 assert.equal((await call('POST', '/groups', { id: 'forum', name: '重复' })).status, 409);
 assert.equal((await call('POST', '/groups', { id: '!bad', name: '错误' })).status, 400);
@@ -141,8 +148,8 @@ assert.equal((await call('PATCH', '/sources/2', { enabled: true })).status, 200)
 assert.equal(db.sources.get(2).removed, 0);
 assert.equal((await call('DELETE', '/groups/forum')).status, 409,
   'nonempty groups must not be removed');
-assert.equal((await call('DELETE', '/groups/blogs')).status, 400,
-  'default blog group must not be removed');
+assert.equal((await call('DELETE', '/groups/feeds')).status, 400,
+  'default RSS group must not be removed');
 assert.ok(snapshots >= 6, 'successful mutations must refresh public snapshot');
 
-console.log('PASS: real Hono routes, D1-compatible mock, authentication, categories, RSS feeds, duplicate detection, initial blog adoption, enable/disable');
+console.log('PASS: protected RSS API, default feeds, retired-source exclusion, duplicate detection and enable/disable');
