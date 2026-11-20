@@ -25,8 +25,13 @@ try{
  assert.match(html,/本地资讯测试文章/);
  assert.match(html,/订阅 <strong>78<\/strong> 个来源/);
  assert.match(html,/<nav class="tabs" aria-label="主导航">/);
- for(const name of ['最新','热搜','资讯','软件','奇趣','财富','英文','技术'])
-   assert.match(html,new RegExp(name));
+ const navOrder=['最新','热搜','资讯','软件','技术','奇趣','财富','英文'];
+ let previous=-1;
+ for(const name of navOrder){
+   const position=html.indexOf('>'+name+'</a>',html.indexOf('<nav class="tabs"'));
+   assert.ok(position>previous,'nav order incorrect: '+name);
+   previous=position;
+ }
  for(const term of ['登录','讨论','我的关注','管理后台','AI资讯','AI日报','AI周报'])
    assert.doesNotMatch(html,new RegExp(term));
  const hot=await get('/c/hot'); assert.equal(hot.status,200);
