@@ -6,7 +6,6 @@ import { originCheck, registerAuthRoutes, requireUser, sessionMiddleware } from 
 import { buildSnapshot, crawlFavicons, crawlFeeds, repoStars } from './crawl.js';
 import { registerFeedspaceAdminRoutes } from './feedspace-admin.js';
 import { hasAdminSession, registerAdminPanelRoutes } from './admin-panel.js';
-import { registerAIHOTRoutes } from './aihot.js';
 import { announceNewBlogs, announceWeeklyTop, describeChat, telegramEnabled } from './telegram.js';
 import { hotPosts, registerDiscussRoutes, votedIds } from './discuss.js';
 import { blockedBlogsPage, blogFollowersPage, blogPage, categoryName, directoryPage, discussionsPage, errorPage, followingBlogsPage, followingOpml, followingPage, hotPage, notificationsPage, postPage, sitemap, timelinePage, userFollowingPage, userPage, userUpvotedPage } from './views.js';
@@ -143,7 +142,6 @@ registerAuthRoutes(app);
 registerDiscussRoutes(app);
 registerFeedspaceAdminRoutes(app, buildSnapshot);
 registerAdminPanelRoutes(app);
-registerAIHOTRoutes(app, getMeta, siteUrl);
 
 // ---------- pages ----------
 

@@ -71,17 +71,9 @@ try {
   assert.equal(legacyLatest.status, 301, '/latest redirects to canonical homepage');
   assert.equal(legacyLatest.headers.get('location'), '/', '/latest points to homepage');
   assert.equal((await get('/hot')).status, 200, 'legacy hot ranking remains available');
-  for (const [path, label] of [
-    ['/ai-hot', 'AI 热点'],
-    ['/ai-daily', 'AI 日报'],
-    ['/ai-weekly', 'AI 周报'],
-  ]) {
-    const res = await get(path);
-    assert.equal(res.status, 200, path + ' native AIHOT page must render');
-    const html = await res.text();
-    assert.match(html, new RegExp(label));
-    assert.match(html, /书面授权/, 'third-party data cannot be republished without permission');
-    assert.match(html, /href="https:\/\/aihot\.news\//);
+  assert.doesNotMatch(homepageHtml, /href="\/ai-(?:hot|daily|weekly)"/);
+  for (const path of ['/ai-hot', '/ai-daily', '/ai-weekly']) {
+    assert.equal((await get(path)).status, 404, path + ' must be removed');
   }
 
   assert.equal((await get('/blogs')).status, 200, 'source directory must render');
