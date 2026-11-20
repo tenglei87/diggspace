@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 import { categoryName, timelinePage, directoryPage, hotPage } from '../worker/views.js';
 
 const sourceGroups = [
-  { id: 'blogs', name: '独立博客' },
+  { id: 'feeds', name: '订阅源' },
   { id: 'forum', name: '论坛社区' },
   { id: 'news', name: '资讯网站' },
 ];
 const stats = { blogs: 5, weekBlogs: 2, dayPosts: 3, stars: null, sourceGroups };
 const context = { site: 'https://feedspace.example', stats, user: null, now: 1795000000 };
 
-assert.equal(categoryName('sg-blogs', sourceGroups), '独立博客');
+assert.equal(categoryName('sg-blogs', sourceGroups), undefined);
+assert.equal(categoryName('sg-feeds', sourceGroups), '订阅源');
 assert.equal(categoryName('sg-news', sourceGroups), '资讯网站');
 assert.equal(categoryName('sg-unknown', sourceGroups), undefined);
 assert.equal(categoryName('ai', sourceGroups), 'AI');
@@ -17,17 +18,15 @@ assert.equal(categoryName('ai', sourceGroups), 'AI');
 const latest = String(await timelinePage({
   ...context, voted: new Set(), posts: [], page: 1, hasMore: false, cat: 'sg-news',
 }));
-assert.match(latest, /\/c\/sg-blogs/);
-assert.match(latest, /\/c\/sg-news/);
-assert.match(latest, /资讯网站/);
-assert.doesNotMatch(latest, /class="side-cats"/, 'sidebar category module is removed');
-assert.doesNotMatch(latest, /<h2>分类<\/h2>/, 'no sidebar heading');
 assert.match(latest, /<nav class="tabs" aria-label="主导航">/);
-assert.match(latest, /href="\/c\/sg-blogs"/);
-assert.match(latest, /href="\/c\/sg-forum"/);
-assert.match(latest, /href="\/c\/sg-news"/);
-assert.match(latest, /href="\/c\/sg-news" aria-current="page">资讯<\/a>/,
-  'active top category must be highlighted');
+assert.match(latest, /href="\/" aria-current="page">最新<\/a>/);
+assert.match(latest, /href="\/discussions">讨论<\/a>/);
+assert.match(latest, /href="\/following">我的关注<\/a>/);
+assert.doesNotMatch(latest, /href="\/c\/sg-blogs"/);
+assert.doesNotMatch(latest, /href="\/c\/sg-forum"/);
+assert.doesNotMatch(latest, /href="\/c\/sg-news"/);
+assert.match(latest, /href="https:\/\/indi\.blog\/"[^>]*>Indi · 中文独立博客/);
+assert.doesNotMatch(latest, /<h2>分类<\/h2>/);
 
 const root = String(await timelinePage({
   ...context, voted: new Set(), page: 1, hasMore: true, cat: '',
@@ -52,7 +51,7 @@ const directory = String(await directoryPage({
   ...context, blogs: [], following: new Set(), view: 'all',
 }));
 assert.match(directory, /data-cat="sg-forum"/);
-assert.match(directory, /data-cat="sg-blogs"/);
+assert.match(directory, /data-cat="sg-feeds"/);
 assert.match(directory, /id="bloglist"/);
 
-console.log('PASS: root latest posts, top blog/forum/news tabs, no sidebar categories, preserved /hot and source directory');
+console.log('PASS: only latest/discussions/following tabs, Indi external link, no legacy blog category');
