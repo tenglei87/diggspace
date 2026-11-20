@@ -25,6 +25,9 @@ try{
  assert.match(html,/本地资讯测试文章/);
  assert.match(html,/订阅 <strong>78<\/strong> 个来源/);
  assert.match(html,/<nav class="tabs" aria-label="主导航">/);
+ // AIHOT is an external recommendation, not an internal feed category.
+ assert.match(html, /<a href="https:\/\/aihot\.news\/" target="_blank" rel="noopener noreferrer">AI新闻资讯<\/a>/);
+ assert.doesNotMatch(html, /<div class="section-head">/, 'latest timeline must not repeat its title');
  const navOrder=['最新','热搜','资讯','软件','技术','奇趣','财富','英文'];
  let previous=-1;
  for(const name of navOrder){
@@ -41,10 +44,18 @@ try{
  const hot=await get('/c/hot'); assert.equal(hot.status,200);
  const hotHtml=await hot.text();
  assert.match(hotHtml,/本地热搜测试文章/);
+ assert.match(hotHtml, /href="https:\/\/aihot\.news\/"[^>]*>AI新闻资讯<\/a>/);
+ assert.doesNotMatch(hotHtml, /<div class="section-head">/, 'category timeline must not repeat 热搜 / 分类资讯');
  assert.doesNotMatch(hotHtml,/本地资讯测试文章/);
  const newsHtml=await (await get('/c/news')).text();
  assert.match(newsHtml,/本地资讯测试文章/);
  assert.doesNotMatch(newsHtml,/本地热搜测试文章/);
+ assert.doesNotMatch(newsHtml, /<div class="section-head">/);
+ for(const category of ['software','tech','fun','money','english']){
+   const pageHtml=await (await get('/c/'+category)).text();
+   assert.doesNotMatch(pageHtml, /<div class="section-head">/, 'repeated heading on '+category);
+   assert.match(pageHtml, /href="https:\/\/aihot\.news\/"[^>]*>AI新闻资讯<\/a>/);
+ }
  assert.equal((await get('/sources')).status,200);
  assert.match(await (await get('/sources')).text(),/RSS/);
  for(const path of ['/admin','/admin/login','/login','/discussions','/following',
