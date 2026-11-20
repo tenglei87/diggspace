@@ -7,9 +7,6 @@ on:
         description: 'Type BIND_DIGG_SPACE to publish https://digg.space'
         required: true
         type: string
-  # Temporary owner-only release of the reviewed master; remove after verification.
-  pull_request:
-    types: [opened]
 
 permissions:
   contents: read
@@ -20,16 +17,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: >-
-      ${{ (github.event_name == 'workflow_dispatch' &&
-        github.ref == 'refs/heads/master' &&
-        inputs.confirm == 'BIND_DIGG_SPACE') ||
-        (github.event_name == 'pull_request' &&
-         github.repository == 'tenglei87/diggspace' &&
-         github.event.pull_request.user.login == 'tenglei87' &&
-         github.event.pull_request.head.repo.full_name == 'tenglei87/diggspace' &&
-         github.event.pull_request.base.ref == 'master' &&
-         github.event.pull_request.title == 'DiggSpace slim sidebar release 2026-11-20') }}
+    if: ${{ github.ref == 'refs/heads/master' && inputs.confirm == 'BIND_DIGG_SPACE' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
