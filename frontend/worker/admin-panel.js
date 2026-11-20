@@ -37,25 +37,25 @@ export async function hasAdminSession(c) {
 }
 
 function page(title, body, script = false) {
-  return \`<!doctype html>
+  return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><title>\${title} · DiggSpace</title>
+<meta name="robots" content="noindex,nofollow"><title>${title} · DiggSpace</title>
 <link rel="stylesheet" href="/admin.css"></head>
 <body><header class="admin-header"><a href="/" class="brand">DiggSpace</a><span>RSS 管理后台</span></header>
-<main class="admin-main">\${body}</main>
-\${script ? '<script src="/admin.js" defer></script>' : ''}</body></html>\`;
+<main class="admin-main">${body}</main>
+${script ? '<script src="/admin.js" defer></script>' : ''}</body></html>`;
 }
 
 const loginHtml = (invalid = false) => page('管理员登录',
-  \`<section class="panel login"><h1>管理员登录</h1><p class="hint">使用你设置的 DIGGSPACE_ADMIN_TOKEN 管理员密钥登录。</p>
-   \${invalid ? '<p class="error" role="alert">密钥错误，请重试。</p>' : ''}
+  `<section class="panel login"><h1>管理员登录</h1><p class="hint">使用你设置的 DIGGSPACE_ADMIN_TOKEN 管理员密钥登录。</p>
+   ${invalid ? '<p class="error" role="alert">密钥错误，请重试。</p>' : ''}
    <form action="/admin/login" method="post" autocomplete="off">
    <label for="password">管理员密钥</label>
    <input id="password" type="password" name="password" required minlength="32" autocomplete="current-password" spellcheck="false" />
    <button type="submit">登录后台</button></form>
-   <p class="hint">密钥只用于一次登录校验，不会出现在浏览器脚本中；会话 8 小时后失效。</p></section>\`);
+   <p class="hint">密钥只用于一次登录校验，不会出现在浏览器脚本中；会话 8 小时后失效。</p></section>`);
 
-const dashboardHtml = page('订阅源管理', \`
+const dashboardHtml = page('订阅源管理', `
 <section class="admin-toolbar">
   <div><h1>订阅源管理</h1><p class="hint">管理本站自己的 RSS / Atom 来源，不再自动导入 Indi 博客目录。</p></div>
   <form method="post" action="/admin/logout"><button class="secondary" type="submit">退出登录</button></form>
@@ -80,7 +80,7 @@ const dashboardHtml = page('订阅源管理', \`
 <div class="table-wrap"><table><thead><tr><th>名称 / 网址</th><th>类型</th><th>状态</th><th>操作</th></tr></thead><tbody id="sources"><tr><td colspan="4">正在加载…</td></tr></tbody></table></div>
 <div class="controls"><button class="secondary" id="more" hidden type="button">加载更多</button><button id="crawl" type="button" class="secondary">抓取到期 RSS（最多 5 个）</button></div>
 <p id="crawl-message" class="message" aria-live="polite"></p>
-</section>\`, true);
+</section>`, true);
 
 export function registerAdminPanelRoutes(app) {
   app.get('/admin/login', async c => {
