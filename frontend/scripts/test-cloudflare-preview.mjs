@@ -48,8 +48,8 @@ for (const [path, title] of [
   }
   assert.match(page, /aihot\.news/, 'AIHOT official links provided');
 }
-assert.doesNotMatch(html, /class="item-title"/,
-  'initial two Indi articles should not remain in the active RSS timeline');
+// New independent administrator sources may already have articles.
+ // Do not enforce an empty homepage after migration.
 
 for (const path of ['/hot', '/blogs', '/discussions', '/admin/login', '/admin.js', '/admin.css']) {
   assert.equal((await request(path)).status, 200, path);
@@ -70,7 +70,9 @@ const sources = await request('/api/admin/feedspace/sources?limit=100', { author
 assert.equal(sources.status, 200);
 const sourceData = await sources.json();
 assert.ok(sourceData.sources.every(s => s.source_origin !== 'retired_catalog'));
-assert.equal(sourceData.sources.length, 0, 'all 1609 seed sources retired; no new manual subscriptions yet');
+assert.ok(sourceData.sources.every(s => s.source_origin === 'manual'),
+  'only independently managed subscriptions may remain');
+console.log('Preserved manual RSS subscriptions:', sourceData.sources.length);
 const email = await fetch(base + '/login', {
   method: 'POST',
   headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
