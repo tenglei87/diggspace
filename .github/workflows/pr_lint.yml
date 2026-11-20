@@ -18,44 +18,41 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - name: Confirm no upstream runtime dependencies
+          node-version: '22'
+      - name: Check isolated read-only architecture
         run: node scripts/test_independence.mjs
-      - name: Check all D1 migrations
+      - name: Validate all 15 D1 migrations
         run: python3 scripts/test_feedspace_schema.py
-      - name: Check Worker and deployment script syntax
+      - name: JavaScript syntax
         run: |
           node --check frontend/worker/index.js
-          node --check frontend/worker/crawl.js
-          node --check frontend/worker/views.js
-          node --check frontend/worker/feedspace-admin.js
-          node --check frontend/worker/admin-panel.js
-          node --check frontend/public/admin.js
-          node --check frontend/scripts/check-deployment.mjs
+          node --check frontend/worker/catalog.js
+          node --check frontend/worker/news.js
+          node --check frontend/scripts/prepare-cloudflare-deployment.mjs
+          node --check frontend/scripts/test-worker-runtime.mjs
           node --check frontend/scripts/test-cloudflare-preview.mjs
-      - name: Ensure placeholder D1 blocks accidental deployment
+      - name: Verify placeholder D1 remains undeployable
         run: |
           if node frontend/scripts/check-deployment.mjs; then
-            echo "Unsafe: unconfigured deployment was permitted!"
+            echo "Unsafe placeholder D1 was deployable"
             exit 1
           fi
-      - name: Install frontend dependencies
+      - name: Install Worker dependencies
         run: npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
-      - name: Check category filters and existing layout
-        run: node frontend/scripts/test-feedspace.mjs
-      - name: Test protected RSS management endpoints and retired-source exclusion
-        run: node frontend/scripts/test-feedspace-admin.mjs
-      - name: Smoke-test local Wrangler Worker with real D1 SQL
+      - name: Test curated feed integrity
+        run: node frontend/scripts/test-news.mjs
+      - name: Apply real local D1 migrations and seed two article fixtures
+        working-directory: frontend
         run: |
-          printf 'ADMIN_TOKEN=ci-local-admin-token-0123456789abcdef0123456789\nCACHE_TTL=0\nEMAIL_DEV_LOG=1\nGITHUB_CLIENT_ID=\n' > frontend/.dev.vars
-          npm run db:migrate --prefix frontend
-          npm run dev:seed --prefix frontend
-          node frontend/scripts/test-worker-runtime.mjs
+          npx wrangler d1 migrations apply diggspace --local
+          npx wrangler d1 execute diggspace --local --file=./scripts/seed-dev.sql
+      - name: Smoke-test actual local Worker/D1 and removed endpoints
+        run: node frontend/scripts/test-worker-runtime.mjs
       - name: Test safe Cloudflare deployment preparation
         run: |
           node frontend/scripts/test-cloudflare-deploy.mjs
           node frontend/scripts/test-deploy-retry.mjs
-      - name: Bundle workers.dev preview without account credentials
+      - name: Bundle Worker dry-run without credentials
         working-directory: frontend
         env:
           DIGGSPACE_D1_ID: 11111111-2222-3333-4444-555555555555

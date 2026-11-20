@@ -1,32 +1,9 @@
-INSERT OR IGNORE INTO blogs (
-  id, name, url, feed, tags, categories, position, removed, status, num, source_group, source_origin
-)
-SELECT
-  'local.dev.block-fixture',
-  '本地屏蔽测试博客',
-  'https://example.invalid/block-fixture/',
-  NULL,
-  '[]',
-  '["dev"]',
-  COALESCE(MAX(position), 0) + 1,
-  0,
-  'ok',
-  COALESCE(MAX(num), 0) + 1,
-  'feeds',
-  'manual'
-FROM blogs
-WHERE 1
-ON CONFLICT (id) DO UPDATE SET
-  categories = excluded.categories,
-  removed = 0,
-  status = 'ok';
-
-INSERT INTO posts (blog_id, url, title, summary, published_at, first_seen_at)
-VALUES
-  ('local.dev.block-fixture', 'https://example.invalid/block-fixture/post-1', '本地测试文章：屏蔽前应显示在最新和最热', '用于本地验证屏蔽功能的测试数据。', unixepoch() - 600, unixepoch()),
-  ('local.dev.block-fixture', 'https://example.invalid/block-fixture/post-2', '本地测试文章：分类最新也应被屏蔽', '用于本地验证屏蔽功能的测试数据。', unixepoch() - 1200, unixepoch()),
-  ('local.dev.block-fixture', 'https://example.invalid/block-fixture/post-3', '本地测试文章：取消屏蔽后重新显示', '用于本地验证屏蔽功能的测试数据。', unixepoch() - 1800, unixepoch())
-ON CONFLICT (blog_id, url) DO UPDATE SET
-  title = excluded.title,
-  summary = excluded.summary,
-  published_at = excluded.published_at;
+INSERT OR IGNORE INTO news_sources
+ (id, category, name, site_url, feed_url, enabled, next_check_at)
+ VALUES
+ ('r-20c43f0b','hot','知乎热榜','https://www.zhihu.com','https://plink.anyfeeder.com/zhihu/hotlist',1,0),
+ ('r-d47fbdcf','news','爱范儿','https://www.ifanr.com','https://www.ifanr.com/feed',1,0);
+INSERT OR IGNORE INTO news_items (source_id,url,title,summary,published_at,first_seen_at)
+ VALUES
+ ('r-20c43f0b','https://example.com/hot/1','本地热搜测试文章','热点来源测试',unixepoch()-120,unixepoch()),
+ ('r-d47fbdcf','https://example.com/news/1','本地资讯测试文章','资讯来源测试',unixepoch()-300,unixepoch());

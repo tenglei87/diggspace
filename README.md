@@ -1,55 +1,47 @@
 # DiggSpace
 
-**DiggSpace** 是独立运营的 RSS / Atom 内容聚合站，位于 [digg.space](https://digg.space)。保持 Indi 原版的简洁版式与「最新 / 讨论 / 我的关注」三个导航，但**不收录或自动同步 Indi 的博客目录**。
+[DiggSpace](https://digg.space) 是一个**无需登录的 RSS 新闻阅读站**。页面延续原 Indi 的简洁双栏风格，但只保留新闻阅读和来源分类。
 
-原始 1,609 个博客订阅已退役，历史记录因关注、评论等关联而保留在数据库中，**不再抓取、展示或计入来源总数**；博客相关内容可前往原站：[Indi · 中文独立博客](https://indi.blog/)。
+## 导航
 
-## 管理员后台
+**最新｜热搜｜资讯｜软件｜奇趣｜财富｜英文｜技术**
 
-**管理地址：[https://digg.space/admin](https://digg.space/admin)**。
+「最新」整合所有有效订阅源，按文章发布时间倒序；其他七栏按代码内的来源类别筛选。不设讨论、我的关注、账号注册、管理员后台、上传、投票或站内修改来源接口。
 
-管理员在 `/admin/login` 输入已配置在 Cloudflare Worker 中的 `ADMIN_TOKEN`（对应 GitHub Repository Secret：`DIGGSPACE_ADMIN_TOKEN`），登录后可直接：
+## 订阅来源
 
-- 添加 RSS、Atom、RSSHub 订阅源（名称、网站地址、RSS 地址、可选内容类型）。
-- 查看状态、编辑、停用、重新启用或软删除来源。
-- 手动抓取最多 5 个到期订阅源，验证文章是否出现在「最新」页面。
-- 不需编辑 GitHub 仓库或 D1 数据库，即可管理日常订阅。
+目前筛选 **78 个 RSS/Atom 来源**，参考了 [top-rss-list](https://github.com/weekend-project-space/top-rss-list)。源码位于 [frontend/worker/catalog.js](./frontend/worker/catalog.js)，每条来源含固定 ID、分类、名称及订阅 URL；新来源必须通过代码提交、评审与部署，**不从外部 GitHub 清单动态同步**，防止第三方更改在生产环境自动执行。
 
-管理员会话使用 HttpOnly + SameSite=Strict 的签名 Cookie，8 小时失效，后台修改接口有同源校验。不要将管理员密钥发给其他人或提交进代码。若忘记密钥，可重新设置 GitHub Secret `DIGGSPACE_ADMIN_TOKEN`，然后手动重新部署，它会覆盖 Worker 的 `ADMIN_TOKEN`。
+七大栏目：热搜（7）、资讯（16）、软件（11）、奇趣（10）、财富（13）、英文（10）、技术（11）。英文栏目包含英语技术文章与英文播客，不保证所有来源实时可用。**没有 AI资讯 栏目，也没有任何 AIHOT 源。**
 
-## 项目结构
+站点将定时检查订阅源；只有实际返回合法 RSS/Atom、包含日期与原文 URL 的条目才会显示。标题跳转至原站，不复制图片或全文。聚合页面只使用简短摘要、来源及发布时间。
 
-| 位置 | 用途 |
-|---|---|
-| `frontend/worker/index.js` | Hono 入口、SSR 路由、RSS 抓取 |
-| `frontend/worker/admin-panel.js` | 管理员登录及后台页面 |
-| `frontend/worker/feedspace-admin.js` | RSS 来源管理 API |
-| `frontend/public/admin.js` 和 `admin.css` | 后台管理界面 |
-| `frontend/migrations/0012_retire_indi_catalog.sql` | 停用原始 CSV 目录，保留历史关联 |
-| `frontend/public/style.css`、`app.js` | 延续原版 Indi 的公开 UI |
-| `scripts/feedspace_admin.py` | 可选的命令行管理工具 |
+## 更新机制
+
+- Cloudflare Worker：`frontend/worker/index.js`
+- 分类目录：`frontend/worker/catalog.js`
+- RSS 同步、抓取、去重和保留期限：`frontend/worker/news.js`
+- 通用 RSS/Atom 解析：`scripts/lib/feed.mjs`
+- Cloudflare D1：迁移 `frontend/migrations/0015_readonly_news.sql`
+- 定时抓取：Cloudflare Cron 每小时第 7 分钟执行，每次处理最多 24 个到期订阅，网络故障自动退避
+- 浏览器不需要 JavaScript、用户凭证或管理员令牌
 
 ## 部署
 
-已使用独立的 Cloudflare Worker、D1 和 digg.space 自定义域名。登录 GitHub 仓库 [Actions](https://github.com/tenglei87/diggspace/actions/workflows/deploy_diggspace.yml)，手动运行 **Deploy DiggSpace to digg.space (manual)**，选择 `master` 并输入 `BIND_DIGG_SPACE`。部署会自动运行数据库迁移、更新 Worker 和刷新前台来源快照。
+沿用用户自己 Cloudflare 账户下的 Worker、D1 和域名 digg.space。GitHub Actions 工作流 [Deploy DiggSpace to digg.space](https://github.com/tenglei87/diggspace/actions/workflows/deploy_diggspace.yml) 需要从 `master` 手动输入 `BIND_DIGG_SPACE` 才会发布。仅使用两个 Secrets：`CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`。部署自动应用 D1 新迁移；无需管理员密钥。
 
-三个 GitHub Secrets：`CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`DIGGSPACE_ADMIN_TOKEN`；无需将其发送到聊天。预设 RSS Cron 仍处于关闭状态，避免在不确定 Cloudflare 额度时自动执行过多请求。需要通过管理后台手动抓取，后续可按套餐配置定时调度。
+先前的 Indi 博客、用户账号、讨论和关注数据仍留在旧 D1 表，**新 Worker 不再读取**。历史迁移必须保留才能支持既有生产数据库，未来可在备份后独立处理物理删除。
 
-## 本地开发
-
-安装 Node.js 22+：
+## 开发
 
 ```bash
 cd frontend
 npm ci
-printf 'ADMIN_TOKEN=ci-local-admin-token-0123456789abcdef0123456789\nCACHE_TTL=0\nEMAIL_DEV_LOG=1\n' > .dev.vars
 npm run db:migrate
-npm run dev:seed
+npx wrangler d1 execute diggspace --local --file=./scripts/seed-dev.sql
 npm run dev
 ```
 
-在浏览器访问 `http://localhost:8787/admin`。旧 RSS CSV 已从仓库删除，不会在开发或生产再次初始化。
+## 致谢与许可
 
-## 版权
-
-本项目在 MIT 许可下继续使用原始 Indi 项目的部分代码，保留 [LICENSE](./LICENSE) 中的原始作者署名与许可证。原站与本项目为独立运营，右侧提供外部跳转。
+保留原始项目 [Indi](https://indi.blog/) 的 MIT 版权署名（见 [LICENSE](./LICENSE)）。RSS 来源名称和 URL 参考上游的公开清单，经本站人工挑选归类，各文章权利归作者或原媒体所有。

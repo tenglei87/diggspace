@@ -26,7 +26,7 @@ assert.ok(next.includes('"database_id": "' + UUID + '"'));
 assert.ok(next.includes('"workers_dev": false'));
 assert.ok(next.includes('"routes": [{ "pattern": "digg.space", "custom_domain": true }]'));
 assert.ok(next.includes('"SITE_URL": "https://digg.space"'));
-assert.ok(next.includes('"crons": []'));
+assert.ok(next.includes('"crons": ["7 * * * *"]'));
 assert.ok(!next.includes('"cpu_ms": 300000'));
 assert.ok(!next.includes('"subrequests": 20000'));
 assert.ok(!next.includes('"send_email":'));
@@ -46,4 +46,4 @@ assert.equal(deploymentUrl(JSON.stringify({
   type: 'deploy', worker_name: 'diggspace', targets: ['https://example.org'],
 })), null);
 
-console.log('PASS: D1 ownership selection, digg.space custom domain, disabled cron/email, and URL extraction');
+console.log('PASS: D1 ownership, digg.space domain, hourly RSS cron, no login email and URL extraction');

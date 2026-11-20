@@ -3,39 +3,13 @@
   "name": "diggspace",
   "main": "worker/index.js",
   "compatibility_date": "2026-10-01",
-  "assets": {
-    "directory": "./public",
-    "binding": "ASSETS"
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "diggspace",
-      // Replace with the ID of a NEW database in your own Cloudflare account.
-      "database_id": "00000000-0000-0000-0000-000000000000"
-    }
-  ],
-  // No upstream custom domain is configured. First deploy to your own workers.dev.
-  // Add your own custom route only after DNS and ownership have been verified.
-  "rules": [{ "type": "Text", "globs": ["**/*.csv"], "fallthrough": true }],
-  "triggers": {
-    "crons": ["7 * * * *", "0 1 * * 1"]
-  },
-  "limits": {
-    "cpu_ms": 300000,
-    "subrequests": 20000
-  },
-  "vars": {
-    // Empty = derive public address from the request. Set after deploying.
-    "SITE_URL": "",
-    "CACHE_TTL": "300",
-    // Empty disables production email until your own sending domain is ready.
-    "EMAIL_FROM": "",
-    // Create your own GitHub OAuth app if you want GitHub login.
-    "GITHUB_CLIENT_ID": "",
-    // Telegram notifications are disabled until configured with your own chat ID.
-    "TELEGRAM_CHAT_ID": ""
-  },
-  "send_email": [{ "name": "EMAIL" }],
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "diggspace",
+    "database_id": "00000000-0000-0000-0000-000000000000"
+  }],
+  "triggers": { "crons": ["7 * * * *"] },
+  "vars": { "SITE_URL": "" },
   "observability": { "enabled": true }
 }

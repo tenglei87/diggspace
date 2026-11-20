@@ -1,11 +1,10 @@
 name: Deploy DiggSpace to digg.space (manual)
 
-# Explicitly opt-in deployment. No pushes or PRs deploy to Cloudflare.
 on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Type BIND_DIGG_SPACE to publish on https://digg.space'
+        description: 'Type BIND_DIGG_SPACE to publish https://digg.space'
         required: true
         type: string
 
@@ -17,12 +16,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  preview:
+  deploy:
     if: ${{ github.ref == 'refs/heads/master' && inputs.confirm == 'BIND_DIGG_SPACE' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Checkout master
+      - name: Checkout reviewed master
         uses: actions/checkout@v4
         with:
           ref: master
@@ -32,75 +31,48 @@ jobs:
           node-version: '22'
       - name: Install Worker dependencies
         run: npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
-      - name: Validate Cloudflare credentials before changing resources
+      - name: Validate Cloudflare credentials
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          DIGGSPACE_ADMIN_TOKEN: ${{ secrets.DIGGSPACE_ADMIN_TOKEN }}
         run: |
           node -e '
-            const {CLOUDFLARE_API_TOKEN:a,CLOUDFLARE_ACCOUNT_ID:b,DIGGSPACE_ADMIN_TOKEN:c}=process.env;
-            if (!a || !b || !c || c.length < 32) {
-              console.error("Missing GitHub Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, or 32+ character DIGGSPACE_ADMIN_TOKEN");
-              process.exit(1);
+            if (!process.env.CLOUDFLARE_API_TOKEN || !process.env.CLOUDFLARE_ACCOUNT_ID) {
+              throw Error("Missing Cloudflare token or account ID");
             }
           '
-      - name: Find or create independent diggspace D1
+      - name: Resolve own D1 database
         working-directory: frontend
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/resolve-cloudflare-d1.mjs
-      - name: Prepare digg.space custom domain (no cron, no email binding)
+      - name: Prepare independent domain and hourly RSS cron
         working-directory: frontend
         run: |
           node scripts/prepare-cloudflare-deployment.mjs
           node scripts/check-deployment.mjs
-      - name: Apply D1 schema migrations
+      - name: Migrate D1 without deleting old user data
         working-directory: frontend
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler d1 migrations apply diggspace --remote
-      - name: Publish Worker on the digg.space custom domain
+      - name: Publish read-only RSS news Worker
         working-directory: frontend
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: node scripts/deploy-with-retry.mjs
-      - name: Set independent administrator bearer secret
-        working-directory: frontend
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          DIGGSPACE_ADMIN_TOKEN: ${{ secrets.DIGGSPACE_ADMIN_TOKEN }}
-        run: printf '%s' "$DIGGSPACE_ADMIN_TOKEN" | npx wrangler secret put ADMIN_TOKEN
-      - name: Rebuild source snapshot after retiring the old Indi catalog
-        env:
-          DIGGSPACE_ADMIN_TOKEN: ${{ secrets.DIGGSPACE_ADMIN_TOKEN }}
-        run: |
-          node --input-type=module -e '
-            const r = await fetch("https://digg.space/api/admin/snapshot", {
-              method: "POST", headers: { Authorization: "Bearer " + process.env.DIGGSPACE_ADMIN_TOKEN },
-              signal: AbortSignal.timeout(30000)
-            });
-            if (!r.ok) throw Error("Failed to rebuild public snapshot: " + r.status);
-            const summary = await r.json();
-            console.log("Refreshed active RSS source snapshot:", summary.blogs);
-            if (!Number.isInteger(summary.blogs) || summary.blogs < 0)
-              throw Error("Invalid active RSS source count");
-            // The original 1609 sources were retired. Preserve independent
-            // feeds subsequently added through the administrator dashboard.
-          '
-      - name: Verify digg.space pages and protected admin API
+      - name: Verify public routes, categories and removed admin features
         working-directory: frontend
         env:
           DIGGSPACE_URL: https://digg.space
-          DIGGSPACE_ADMIN_TOKEN: ${{ secrets.DIGGSPACE_ADMIN_TOKEN }}
         run: node scripts/test-cloudflare-preview.mjs
       - name: Deployment summary
         run: |
-          echo "## DiggSpace custom domain deployment" >> "$GITHUB_STEP_SUMMARY"
-          echo "URL: https://digg.space" >> "$GITHUB_STEP_SUMMARY"
-          echo "D1: diggspace (own Cloudflare account)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Automatic crawling and email login: intentionally disabled until verified" >> "$GITHUB_STEP_SUMMARY"
+          echo "## DiggSpace RSS newspaper deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "Domain: https://digg.space" >> "$GITHUB_STEP_SUMMARY"
+          echo "78 sources in code; hourly RSS cron is enabled" >> "$GITHUB_STEP_SUMMARY"
+          echo "Login, discussions, following and administrator pages are removed" >> "$GITHUB_STEP_SUMMARY"
+          echo "The first hourly crawl will populate new articles; feeds may fail independently" >> "$GITHUB_STEP_SUMMARY"
