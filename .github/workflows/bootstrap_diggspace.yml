@@ -1,0 +1,82 @@
+name: Bootstrap DiggSpace catalog and 2 RSS feeds
+
+# One-off authenticated operator trigger; no PR, push or scheduled writes.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type IMPORT_2_RSS to import 1609 existing blogs and fetch up to two feeds'
+        required: true
+        type: string
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: diggspace-cloudflare-deployment
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    if: >-
+      ${{ (github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/master' &&
+        inputs.confirm == 'IMPORT_2_RSS') ||
+        (github.event_name == 'issues' &&
+         github.repository == 'tenglei87/diggspace' &&
+         github.event.issue.user.login == 'tenglei87' &&
+         github.event.issue.title == 'DiggSpace RSS pilot 2026-11-20') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Wrangler CLI
+        run: npm ci --prefix frontend --ignore-scripts --no-audit --no-fund
+      - name: Verify target and required credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DIGGSPACE_ADMIN_TOKEN: ${{ secrets.DIGGSPACE_ADMIN_TOKEN }}
+        run: |
+          node -e '
+            const e=process.env;
+            if(!e.CLOUDFLARE_API_TOKEN || !e.CLOUDFLARE_ACCOUNT_ID ||
+               !e.DIGGSPACE_ADMIN_TOKEN || e.DIGGSPACE_ADMIN_TOKEN.length<32)
+              throw Error("Required Cloudflare credentials or admin token missing");
+          '
+      - name: Reuse existing diggspace D1
+        working-directory: frontend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/resolve-cloudflare-d1.mjs
+      - name: Prepare temporary D1 binding without redeploying site
+        working-directory: frontend
+        run: |
+          node scripts/prepare-cloudflare-deployment.mjs
+          node scripts/check-deployment.mjs
+      - name: Generate safe idempotent SQL from local catalog
+        run: |
+          node scripts/lint.mjs
+          node scripts/generate-catalog-import.mjs
+      - name: Import original blog catalog and two source categories
+        working-directory: frontend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/bootstrap-d1-catalog.mjs
+      - name: Pilot crawl of at most two due feeds (no favicons)
+        working-directory: frontend
+        env:
+          DIGGSPACE_ADMIN_TOKEN: ${{ secrets.DIGGSPACE_ADMIN_TOKEN }}
+        run: node scripts/pilot-rss-crawl.mjs
+      - name: Finish summary
+        run: |
+          echo "DiggSpace: https://digg.space" >> "$GITHUB_STEP_SUMMARY"
+          echo "Automatic RSS cron remains disabled until source reliability and costs are verified." >> "$GITHUB_STEP_SUMMARY"
