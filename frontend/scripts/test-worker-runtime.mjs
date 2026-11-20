@@ -28,6 +28,7 @@ try{
  // AIHOT is an external recommendation, not an internal feed category.
  assert.match(html, /<a href="https:\/\/aihot\.news\/" target="_blank" rel="noopener noreferrer">AI新闻资讯<\/a>/);
  assert.doesNotMatch(html, /<div class="section-head">/, 'latest timeline must not repeat its title');
+ assert.doesNotMatch(html, /<p class="about">|上次成功抓取/, 'right sidebar has no helper text or last fetch');
  const navOrder=['最新','热搜','资讯','软件','技术','奇趣','财富','英文'];
  let previous=-1;
  for(const name of navOrder){
