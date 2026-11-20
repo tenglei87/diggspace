@@ -1,99 +1,27 @@
-# DiggSpace Worker
+# DiggSpace · Cloudflare Worker
 
-Cloudflare Worker + Hono (SSR) + D1 实现的独立 RSS / Atom 聚合站。前端保留原网站结构、样式及基本交互；本站的数据采集、账户、密钥和部署独立运行。
+这个独立站点运行于 Cloudflare Workers + D1，并采用原始 Indi 公开页面的布局与交互。当前版本**不再包含 Indi 的 1,609 个博客订阅源**，只管理站长手动添加的 RSS、Atom 和 RSSHub 来源。
 
-## 目录
+## 管理后台
 
-- `worker/index.js`：HTTP 路由、最新/热门/我的关注、定时抓取及 API
-- `worker/crawl.js`：D1 存储、定时队列、RSS 抓取、首页快照
-- `worker/feedspace-admin.js`：仅管理员可访问的来源/分类 API
-- `public/`：既有样式、浏览器 JS、favicon（无框架构建）
-- `migrations/`：从原数据结构升级到顶级来源类目
-- `../data/initial-blogs.csv`：独立保存的首次导入清单（不会再自动同步）
-- `../scripts/lib/feed.mjs`：跨 Node/Worker 共享的订阅解析器
+本地：`http://localhost:8787/admin`；生产：`https://digg.space/admin`。由 `worker/admin-panel.js` 负责管理员登录/签名 Cookie，`worker/feedspace-admin.js` 负责订阅源增删改查，`public/admin.js` 和 `admin.css` 负责后台页面。管理员密钥对应环境变量 `ADMIN_TOKEN`（部署工作流从 GitHub `DIGGSPACE_ADMIN_TOKEN` 写入）。
 
-## 本地开发
+## 本地启动
 
-Node.js 22+：
-
-```bash
-cd frontend
+```sh
 npm ci
-printf 'ADMIN_TOKEN=local-dev-token\nCACHE_TTL=0\nEMAIL_DEV_LOG=1\nGITHUB_CLIENT_ID=\n' > .dev.vars
+printf 'ADMIN_TOKEN=ci-local-admin-token-0123456789abcdef0123456789\nCACHE_TTL=0\nEMAIL_DEV_LOG=1\n' > .dev.vars
 npm run db:migrate
 npm run dev:seed
 npm run dev
 ```
 
-打开 http://localhost:8787。种子脚本写入测试文章（与实际 RSS 源分离），便于检查热门、最新、关注和屏蔽功能。启动 Worker 本身不会触发真实 RSS 抓取；首次调用 `POST /api/admin/crawl` 或 Cloudflare 定时任务时才会把本地初始目录导入 D1。
+打开 /admin 登录后，可添加新来源、编辑、停用或启用，并通过受保护的抓取操作立即导入少量文章。
 
-如果要手动测试抓取：
+## 数据库
 
-```bash
-curl -X POST -H "Authorization: Bearer local-dev-token" \
-  "http://localhost:8787/api/admin/crawl?limit=20&favicons=0"
-```
+迁移 `0012_retire_indi_catalog.sql` 会停用旧 CSV 来源，禁止继续抓取并清除旧的公开快照；保留历史文章、评论与关注的外键关联。新的默认类型为 `feeds`（订阅源），原博客类型 `blogs` 已删除。站点不再附带 CSV，也不会在抓取时重新导入原博客目录。
 
-`all=1` 表示忽略下次抓取时间约束；`limit` 控制本轮处理数。大量订阅可能会消耗资源，建议从小批量开始。
+## 发布
 
-## 页面
-
-| 地址 | 含义 |
-| --- | --- |
-| `/` | 热门文章 |
-| `/latest` | 全部来源的最新文章 |
-| `/c/sg-blogs` | 独立博客类目 |
-| `/c/sg-<类目ID>` | 自定义类目 |
-| `/blogs` | 订阅源目录（保留原路由） |
-| `/b/<数字ID>` | 订阅源详情（保留原路由） |
-| `/following` | 我的关注 |
-| `/following.opml` | 导出已关注来源 |
-| `/api/admin/feedspace/groups` | 管理来源类目 |
-| `/api/admin/feedspace/sources` | 管理 RSS 来源 |
-| `/api/admin/crawl` | 管理员手动抓取 |
-
-旧的 `/c/ai` 等博客主题分类 URL 仍可用，但主界面显示的是顶级来源类目。浏览器 CSS/JS 以及原有文章卡片、评论、投票均保留。
-
-## 独立数据维护
-
-第一轮抓取时执行一次 `syncBlogs` 导入 `../data/initial-blogs.csv`，并写入 `meta.initial_catalog_imported = 1`。此后定时任务**不再读取外部目录，也不会重新覆盖已有来源**。初始博客和新加论坛/资讯源都可通过管理员 API 修改。
-
-数据存在你自己的 D1：`blogs`、`posts`、`users`、`follows` 等，原有数据结构保留。数据库迁移 `0011_feedspace_sources.sql` 加入类目表及来源标记。
-
-## 上线部署
-
-`wrangler.jsonc` 里已经删除原服务的域名、D1 UUID、OAuth 和 Telegram 账号值，默认使用占位数据库 ID，阻止误发布：
-
-```bash
-cd frontend
-npx wrangler login
-npx wrangler d1 create diggspace
-# 把新数据库的 ID 填到 wrangler.jsonc
-npx wrangler secret put ADMIN_TOKEN
-npm run deploy
-```
-
-**正式域名为 `https://digg.space`。** 建议从 GitHub Actions 的 `Deploy DiggSpace to digg.space (manual)` 手动工作流发布，输入 `BIND_DIGG_SPACE`。该流程在 Actions 临时环境填入新 D1 ID，自动设置 `routes: [{ pattern: 'digg.space', custom_domain: true }]`、`SITE_URL=https://digg.space`，执行迁移后部署。不需要编辑仓库里的数据库占位 ID。请确认根域名的现有 DNS/Worker 状态，以免影响已有网站。首次上线不启用自动抓取或未配置的邮箱登录。
-
-需要配置自己的用户登录渠道：
-
-- **GitHub 登录（可选）**：创建自己的 OAuth App，回调 `<SITE_URL>/auth/github/callback`，设置 `GITHUB_CLIENT_ID` 和 Secret `GITHUB_CLIENT_SECRET`。
-- **邮箱登录（可选）**：启用自己的发件域，设置 `EMAIL_FROM` 并正确配置 Cloudflare Email Sending。
-- **Telegram 通知（可选）**：自己的 Bot Token、群组 ID，以及有效的 `SITE_URL`，否则不会发送。
-
-Cloudflare Worker 定时抓取将按订阅源活跃度安排复查：30 天内更新过的来源约每小时检查一次，一年内更新过的约每 3 小时，较久未更新的约每 12 小时。失败会退避重试。RSS 历史文章在 D1 中保存。生产抓取千余来源通常需要 Workers Paid 计划。
-
-更多类目和来源管理示例见根目录 [FEEDSPACE.md](../FEEDSPACE.md)。
-
-## 测试
-
-```bash
-# 在仓库根目录
-node scripts/lint.mjs
-python3 scripts/test_feedspace_schema.py
-node scripts/test_independence.mjs
-# 安装完前端依赖后：
-node frontend/scripts/test-feedspace.mjs
-```
-
-MIT 许可和原软件著作权声明保留在根目录 [LICENSE](../LICENSE)。
+通过仓库的手动 GitHub Actions 工作流将自己的 D1 ID 及 digg.space Custom Domain 写入临时 Wrangler 配置，执行 migrations、发布 Worker、设置 ADMIN_TOKEN 并生成新快照。默认关闭 RSS Cron、邮件发送，避免未配置时的不可预期行为。详见仓库根目录 `README.md` 与 `FEEDSPACE.md`。
