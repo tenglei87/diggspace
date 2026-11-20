@@ -7,7 +7,7 @@
     "test": "python3 scripts/test_feedspace_schema.py && node scripts/test_independence.mjs && node frontend/scripts/test-news.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "repository": {
     "type": "git",
