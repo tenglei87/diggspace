@@ -22,4 +22,4 @@ if (url && (!url.startsWith('https://') || !URL.canParse(url))) {
   console.error('Deploy blocked: SITE_URL must be a valid HTTPS URL or empty.');
   process.exit(1);
 }
-console.log('Deployment configuration checked. Remember to create your own ADMIN_TOKEN secret.');
+console.log('Deployment configuration checked. Read-only RSS Worker needs no admin secret.');
