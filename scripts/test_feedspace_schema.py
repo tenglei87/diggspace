@@ -6,7 +6,7 @@ import sqlite3
 root = Path(__file__).resolve().parent.parent
 db = sqlite3.connect(":memory:")
 migrations = sorted((root / "frontend" / "migrations").glob("*.sql"))
-assert migrations and migrations[-1].name == "0014_drop_aihot_cache.sql", migrations[-1].name
+assert migrations and migrations[-1].name == "0015_readonly_news.sql", migrations[-1].name
 
 for file in migrations:
     if file.name == "0011_feedspace_sources.sql":
@@ -38,4 +38,8 @@ assert db.execute("SELECT COUNT(*) FROM meta WHERE key='snapshot'").fetchone()[0
 assert db.execute("SELECT COUNT(*) FROM blogs WHERE removed=0 AND source_origin='retired_catalog'").fetchone()[0] == 0
 
 assert db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='aihot_cache'").fetchone() is None
-print("PASS: 14 migrations; legacy feeds preserved, external AI content cache removed")
+assert db.execute("SELECT name FROM sqlite_master WHERE name='news_sources'").fetchone()
+assert db.execute("SELECT name FROM sqlite_master WHERE name='news_items'").fetchone()
+assert db.execute("SELECT name FROM sqlite_master WHERE name='news_meta'").fetchone()
+assert db.execute("SELECT COUNT(*) FROM news_items").fetchone()[0] == 0
+print("PASS: 15 migrations, new isolated read-only RSS tables, old archives untouched")
