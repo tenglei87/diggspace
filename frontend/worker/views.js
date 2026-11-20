@@ -119,7 +119,10 @@ function breadcrumbs(site, items) {
 }
 
 const NAV = [
-  ['latest', '/latest', '最新'],
+  ['latest', '/', '最新'],
+  ['sg-blogs', '/c/sg-blogs', '博客'],
+  ['sg-forum', '/c/sg-forum', '论坛'],
+  ['sg-news', '/c/sg-news', '资讯'],
   ['discussions', '/discussions', '讨论'],
   ['following', '/following', '我的关注'],
 ];
@@ -137,14 +140,7 @@ function githubBadge(stars) {
   </a>`;
 }
 
-// Category links: in the sidebar on wide screens, and as one scrolling row
-// above the latest list on narrow ones
-function categoryLinks(cat, cls, groups = [{ id: 'blogs', name: '独立博客' }]) {
-  return html`<nav class="${cls}" aria-label="分类">
-    <a href="/latest"${current(cat === '')}>全部</a>
-    ${groups.map(({ id, name }) => html`<a href="/c/sg-${id}"${current(cat === `sg-${id}`)}>${name}</a>`)}
-  </nav>`;
-}
+// Source categories are shown in the main header, not duplicated in the sidebar.
 
 // ---------- layout ----------
 
@@ -191,8 +187,6 @@ ${jsonLd.map(jsonLdScript)}
     <main>${body}</main>
     <aside class="side">
       ${stats ? html`<p class="stats"><a href="/blogs">收录 <b>${stats.blogs.toLocaleString('en-US')}</b> 个来源</a><br>本周 <b>${stats.weekBlogs}</b> 个来源更新<br>24 小时内 <b>${stats.dayPosts}</b> 篇</p>` : ''}
-      <h2>分类</h2>
-      ${categoryLinks(cat, 'side-cats', stats?.sourceGroups)}
       <p class="side-links"><a href="/random" rel="nofollow">随机逛一个网站 →</a></p>
       ${githubBadge(stats?.stars)}
       <div class="about">${SITE_NAME} 汇聚独立博客、论坛及资讯网站的 RSS 更新，<details class="hint"><summary>定时检查 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>订阅源由本站独立维护。</div>
@@ -256,8 +250,8 @@ function foldedList(posts, opts) {
 
 export function timelinePage({ site, stats, user, voted, posts, page, hasMore, cat, now }) {
   const name = cat && categoryName(cat, stats?.sourceGroups);
-  const base = cat ? `/c/${cat}` : '/latest';
-  const path = page > 1 ? `${base}/page/${page}` : base;
+  const base = cat ? `/c/${cat}` : '';
+  const path = page > 1 ? `${base}/page/${page}` : (base || '/');
   const pageSuffix = page > 1 ? ` · 第 ${page} 页` : '';
   const title = name ? `${name}${pageSuffix} · ${SITE_NAME}` : `最新文章${pageSuffix} · ${SITE_NAME}`;
   const description = name
@@ -265,12 +259,14 @@ export function timelinePage({ site, stats, user, voted, posts, page, hasMore, c
     : `${stats?.blogs ?? 1400} 个${SITE_TAGLINE}的最新文章，点击直达原博客。`;
   return layout({
     site, stats, user, title, description, path, cat: cat || '',
-    nav: 'latest',
-    jsonLd: name ? [breadcrumbs(site, [[SITE_NAME, '/'], [name, base]])] : [],
+    nav: cat && ['sg-blogs', 'sg-forum', 'sg-news'].includes(cat) ? cat : 'latest',
+    jsonLd: name ? [breadcrumbs(site, [[SITE_NAME, '/'], [name, base]])] : page === 1
+      ? [{ '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME,
+          alternateName: SITE_TAGLINE, url: `${site}/`, description, inLanguage: 'zh-CN' }]
+      : [],
     body: html`
       <h1 class="${name ? 'page-title' : 'visually-hidden'}">${name || '最新文章'}</h1>
-      ${categoryLinks(cat || '', 'top-cats', stats?.sourceGroups)}
-      ${posts.length ? foldedList(posts, { now, voted, next: path, showDate: true }) : html`<p class="empty-note">这里还没有文章。</p>`}
+      ${posts.length ? foldedList(posts, { now, voted, next: path, showDate: true }) : html`<p class="empty-note">暂无文章更新，可先在右上角搜索订阅源。</p>`}
       ${pager(base, page, hasMore)}`,
   });
 }
@@ -278,19 +274,19 @@ export function timelinePage({ site, stats, user, voted, posts, page, hasMore, c
 // ---------- hot (/) ----------
 
 export function hotPage({ site, stats, user, voted, posts, page, hasMore, now, offset }) {
-  const path = page > 1 ? `/page/${page}` : '/';
+  const path = page > 1 ? `/hot/page/${page}` : '/hot';
   const description = `收录 ${stats?.blogs ?? 1400} 个${SITE_TAGLINE}，用一个简单的算法，帮助你找到值得读的内容。`;
   return layout({
     site, stats, user, path, description,
-    title: page > 1 ? `热门 · 第 ${page} 页 · ${SITE_NAME}` : `${SITE_NAME} · ${SITE_TAGLINE}`,
+    title: page > 1 ? `热门 · 第 ${page} 页 · ${SITE_NAME}` : `热门文章 · ${SITE_NAME}`, 
     nav: 'hot',
-    jsonLd: page === 1 ? [{ '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME, alternateName: SITE_TAGLINE, url: `${site}/`, description, inLanguage: 'zh-CN' }] : [],
+    jsonLd: [breadcrumbs(site, [[SITE_NAME, '/'], ['热门文章', '/hot']])],
     body: html`
       <h1 class="visually-hidden">${SITE_NAME} · ${SITE_TAGLINE}热门文章</h1>
       ${posts.length
         ? html`<ol class="items">${posts.map((p, i) => postItem(p, { now, voted, next: path, showDate: true, rank: offset + i + 1 }))}</ol>`
         : html`<p class="empty-note">最近还没有文章。</p>`}
-      ${pager('', page, hasMore, ['← 上一页', '下一页 →'])}`,
+      ${pager('/hot', page, hasMore, ['← 上一页', '下一页 →'])}`,
   });
 }
 
@@ -865,7 +861,10 @@ export function sitemap({ site, blogs, discussed, now }) {
   const url = (path, lastmod) => `  <url><loc>${xml(site + path)}</loc>${lastmod ? `<lastmod>${iso(lastmod).slice(0, 10)}</lastmod>` : ''}</url>`;
   const lines = [
     url('/', now),
-    url('/latest', now),
+    url('/hot', now),
+    url('/c/sg-blogs', now),
+    url('/c/sg-forum', now),
+    url('/c/sg-news', now),
     url('/discussions', now),
     url('/blogs', now),
     ...CATEGORIES.map(([id]) => url(`/c/${id}`, now)),

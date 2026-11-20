@@ -156,7 +156,7 @@ async function timeline(c, cat) {
     stats = { blogs: 0, weekBlogs: 0, dayPosts: 0, ...stats, sourceGroups };
   }
   if (!page || (cat && !categoryName(cat, stats.sourceGroups))) return notFound(c, stats);
-  if (c.req.param('n') === '1') return c.redirect(cat ? `/c/${cat}` : '/latest', 301);
+  if (c.req.param('n') === '1') return c.redirect(cat ? `/c/${cat}` : '/', 301);
   const rows = await latestPosts(c.env.DB, {
     cat, userId: c.get('user')?.id, limit: TIMELINE_PAGE_SIZE + 1, offset: (page - 1) * TIMELINE_PAGE_SIZE,
   });
@@ -168,8 +168,12 @@ async function timeline(c, cat) {
     hasMore: rows.length > TIMELINE_PAGE_SIZE,
   }));
 }
-app.get('/latest', (c) => timeline(c, ''));
-app.get('/latest/page/:n{[0-9]+}', (c) => timeline(c, ''));
+// The main URL renders newest articles directly (no empty hot-feed landing page).
+app.get('/', (c) => timeline(c, ''));
+app.get('/page/:n{[0-9]+}', (c) => timeline(c, ''));
+// Preserve old latest URLs as permanent aliases for bookmarks and links.
+app.get('/latest', (c) => c.redirect('/', 301));
+app.get('/latest/page/:n{[0-9]+}', (c) => c.redirect(`/page/${c.req.param('n')}`, 301));
 app.get('/c/:cat', (c) => timeline(c, c.req.param('cat')));
 app.get('/c/:cat/page/:n{[0-9]+}', (c) => timeline(c, c.req.param('cat')));
 
@@ -177,7 +181,7 @@ async function hot(c) {
   const page = pageParam(c);
   const stats = await getMeta(c.env.DB, 'stats');
   if (!page) return notFound(c, stats);
-  if (c.req.param('n') === '1') return c.redirect('/', 301);
+  if (c.req.param('n') === '1') return c.redirect('/hot', 301);
   const ranked = await hotPosts(c.env.DB, c.get('user')?.id);
   const offset = (page - 1) * HOT_PAGE_SIZE;
   const posts = ranked.slice(offset, offset + HOT_PAGE_SIZE).map(toPost);
@@ -188,11 +192,9 @@ async function hot(c) {
     hasMore: page < HOT_MAX_PAGES && ranked.length > offset + HOT_PAGE_SIZE,
   }));
 }
-// Hot is the homepage
-app.get('/', hot);
-app.get('/page/:n{[0-9]+}', hot);
-app.get('/hot', (c) => c.redirect('/', 301));
-app.get('/hot/page/:n{[0-9]+}', (c) => c.redirect(`/page/${c.req.param('n')}`, 301));
+// Retain the old ranking feature at /hot; it no longer controls the homepage.
+app.get('/hot', hot);
+app.get('/hot/page/:n{[0-9]+}', hot);
 
 const DISCUSSION_PAGE_SIZE = 20;
 
