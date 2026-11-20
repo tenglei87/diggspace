@@ -45,9 +45,16 @@ for(const name of ['最新','热搜','资讯','软件','技术','奇趣','财富
 for(const [cat,label] of [['hot','热搜'],['news','资讯'],['software','软件'],['tech','技术'],
  ['fun','奇趣'],['money','财富'],['english','英文']]){
  assert.match(html,new RegExp('href="/c/'+cat+'"[^>]*>'+label+'</a>'));
- assert.equal((await get('/c/'+cat)).status,200,'category '+cat);
+ const categoryResult=await get('/c/'+cat+'?verify=external-link-'+Date.now()+'-'+cat);
+ assert.equal(categoryResult.status,200,'category '+cat);
+ const categoryHTML=await categoryResult.text();
+ assert.doesNotMatch(categoryHTML, /<div class="section-head">/,
+   'category '+cat+' should not repeat title and 分类资讯');
+ assert.match(categoryHTML, /href="https:\/\/aihot\.news\/"[^>]*>AI新闻资讯<\/a>/);
 }
 assert.match(html,/订阅 <strong>78<\/strong> 个来源/);
+assert.match(html, /<a href="https:\/\/aihot\.news\/" target="_blank" rel="noopener noreferrer">AI新闻资讯<\/a>/);
+assert.doesNotMatch(html, /<div class="section-head">/, 'latest must show articles directly');
 // Article titles and summaries can legitimately contain words such as 讨论,
 // 登录 or AI资讯. Check the actual site header, never the editorial content.
 const header=html.match(/<header class="top">([\s\S]*?)<\/header>/)?.[1] || '';
