@@ -7,6 +7,32 @@ const TIMEOUT_MS = 20_000;
 // A feed bigger than this is skipped, so one huge (or hostile) response can't
 // exhaust a Worker's 128 MB of memory
 const MAX_FEED_BYTES = 8 * 1024 * 1024;
+const MAX_PARSED_ENTRIES = 500;
+const MAX_ENTRY_BYTES = 128 * 1024;
+
+// Advance past each complete item/entry at most once. Avoid repeated regex
+// backtracking over unclosed tags in an untrusted 8 MB XML document.
+function extractEntries(xml, tag) {
+  const startTag = '<' + tag;
+  const endTag = '</' + tag + '>';
+  const entries = [];
+  let cursor = 0;
+  while (entries.length < MAX_PARSED_ENTRIES) {
+    const start = xml.indexOf(startTag, cursor);
+    if (start < 0) break;
+    const boundary = xml[start + startTag.length];
+    if (boundary !== '>' && !/\s/.test(boundary || '')) {
+      cursor = start + startTag.length;
+      continue;
+    }
+    const end = xml.indexOf(endTag, start + startTag.length);
+    if (end < 0) break;
+    entries.push(xml.slice(start, Math.min(end + endTag.length, start + MAX_ENTRY_BYTES)));
+    cursor = end + endTag.length;
+  }
+  return entries;
+}
+
 
 // Read a response body as UTF-8 text, giving up past `maxBytes`
 export async function readTextCapped(res, maxBytes) {
@@ -111,7 +137,7 @@ export function parseFeed(text, baseUrl, now = Date.now()) {
   else return null;
 
   const entryTag = feedType === 'atom' ? 'entry' : 'item';
-  const raw = text.match(new RegExp(`<${entryTag}[\\s>][\\s\\S]*?</${entryTag}>`, 'g')) ?? [];
+  const raw = extractEntries(text, entryTag);
 
   // Only look at dates inside entries; channel-level dates are often build times.
   // Prefer publish dates: generators like Hexo set <updated> to the build time.
