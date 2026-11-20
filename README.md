@@ -4,6 +4,12 @@
 
 原始 1,609 个博客订阅已退役，历史记录因关注、评论等关联而保留在数据库中，**不再抓取、展示或计入来源总数**；博客相关内容可前往原站：[Indi · 中文独立博客](https://indi.blog/)。
 
+## AIHOT 内容入口
+
+站内新增 [AI 热点](https://digg.space/ai-hot)、[AI 日报](https://digg.space/ai-daily)、[AI 周报](https://digg.space/ai-weekly) 三个原生阅读栏目，对应 AIHOT 官方 `/api/v1` 接口（无 API Key）。保留 DiggSpace 原有 RSS 最新、讨论和关注功能。
+
+**注意授权：** [AIHOT 公开使用规则](https://aihot.news/terms) 要求，对公众的持续数据再分发、公开镜像及商业接入须取得书面许可。未取得授权前，三个栏目仅展示跳转至 AIHOT 原站的入口，不会抓取或公开复制其热点榜及日报、周报正文。取得授权后，可经单独 GitHub Secret 开启站内数据视图。详细技术文档见 [AIHOT.md](./AIHOT.md)。
+
 ## 管理员后台
 
 **管理地址：[https://digg.space/admin](https://digg.space/admin)**。
