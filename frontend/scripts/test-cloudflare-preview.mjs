@@ -33,6 +33,16 @@ assert.doesNotMatch(html, /href="\/c\/sg-blogs"/);
 assert.doesNotMatch(html, /href="\/c\/sg-forum"/);
 assert.doesNotMatch(html, /href="\/c\/sg-news"/);
 assert.doesNotMatch(html, /收录 <b>1,609<\/b>/, 'retired blog count is not displayed');
+for (const [path, title] of [
+  ['/ai-hot', 'AI热点'], ['/ai-daily', 'AI日报'], ['/ai-weekly', 'AI周报'],
+]) {
+  const response = await request(path);
+  assert.equal(response.status, 200, 'native AIHOT section ' + path);
+  const page = await response.text();
+  assert.match(page, new RegExp(title));
+  assert.match(page, /书面授权/, 'public reuse remains disabled without written permission');
+  assert.match(page, /aihot\.news/, 'AIHOT official links provided');
+}
 assert.doesNotMatch(html, /class="item-title"/,
   'initial two Indi articles should not remain in the active RSS timeline');
 
