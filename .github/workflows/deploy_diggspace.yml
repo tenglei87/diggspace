@@ -75,6 +75,20 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           DIGGSPACE_ADMIN_TOKEN: ${{ secrets.DIGGSPACE_ADMIN_TOKEN }}
         run: printf '%s' "$DIGGSPACE_ADMIN_TOKEN" | npx wrangler secret put ADMIN_TOKEN
+      - name: Rebuild source snapshot after retiring the old Indi catalog
+        env:
+          DIGGSPACE_ADMIN_TOKEN: ${{ secrets.DIGGSPACE_ADMIN_TOKEN }}
+        run: |
+          node --input-type=module -e '
+            const r = await fetch("https://digg.space/api/admin/snapshot", {
+              method: "POST", headers: { Authorization: "Bearer " + process.env.DIGGSPACE_ADMIN_TOKEN },
+              signal: AbortSignal.timeout(30000)
+            });
+            if (!r.ok) throw Error("Failed to rebuild public snapshot: " + r.status);
+            const summary = await r.json();
+            console.log("Refreshed active RSS source snapshot:", summary.blogs);
+            if (summary.blogs !== 0) throw Error("Unexpected active sources after Indi catalog retirement");
+          '
       - name: Verify digg.space pages and protected admin API
         working-directory: frontend
         env:

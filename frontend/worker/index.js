@@ -2,10 +2,10 @@
 // sitemap, API, favicons and the hourly crawl. Static files in ../public (style.css, app.js, favicon.svg) are
 // served by Workers Static Assets before this code runs.
 import { Hono } from 'hono';
-import initialBlogsCsv from '../../data/initial-blogs.csv';
 import { originCheck, registerAuthRoutes, requireUser, sessionMiddleware } from './auth.js';
-import { buildSnapshot, crawlFavicons, crawlFeeds, repoStars, syncBlogs } from './crawl.js';
+import { buildSnapshot, crawlFavicons, crawlFeeds, repoStars } from './crawl.js';
 import { registerFeedspaceAdminRoutes } from './feedspace-admin.js';
+import { hasAdminSession, registerAdminPanelRoutes } from './admin-panel.js';
 import { announceNewBlogs, announceWeeklyTop, describeChat, telegramEnabled } from './telegram.js';
 import { hotPosts, registerDiscussRoutes, votedIds } from './discuss.js';
 import { blockedBlogsPage, blogFollowersPage, blogPage, categoryName, directoryPage, discussionsPage, errorPage, followingBlogsPage, followingOpml, followingPage, hotPage, notificationsPage, postPage, sitemap, timelinePage, userFollowingPage, userPage, userUpvotedPage } from './views.js';
@@ -125,8 +125,8 @@ app.use('*', originCheck);
 app.use('*', async (c, next) => {
   const ttl = parseInt(c.env.CACHE_TTL ?? '300', 10);
   const path = new URL(c.req.url).pathname;
-  const signedIn = /(?:^|;\s*)sid=/.test(c.req.header('Cookie') ?? '');
-  if (c.req.method !== 'GET' || !ttl || signedIn || path.startsWith('/api/admin') || path === '/random' || path.startsWith('/auth/')) return next();
+  const signedIn = /(?:^|;\s*)(?:sid|digg_admin)=/.test(c.req.header('Cookie') ?? '');
+  if (c.req.method !== 'GET' || !ttl || signedIn || path.startsWith('/api/admin') || path.startsWith('/admin') || path === '/random' || path.startsWith('/auth/')) return next();
   const cache = caches.default;
   const hit = await cache.match(c.req.raw);
   if (hit) return hit;
@@ -141,6 +141,7 @@ app.use('*', sessionMiddleware);
 registerAuthRoutes(app);
 registerDiscussRoutes(app);
 registerFeedspaceAdminRoutes(app, buildSnapshot);
+registerAdminPanelRoutes(app);
 
 // ---------- pages ----------
 
@@ -581,29 +582,12 @@ app.on(['GET', 'HEAD'], '/avatars/:id{[0-9]+}', async (c) => {
   return c.body(new Uint8Array(row.data), 200, imageHeaders(row.content_type, 2592000));
 });
 
-// The independent initial catalog is imported only once per D1 database.
-// After bootstrap, all sources are controlled by DiggSpace administrators.
-// Cron NEVER downloads a source list or reverts manual edits.
-async function ensureInitialCatalog(db) {
-  const imported = await db.prepare("SELECT 1 FROM meta WHERE key = 'initial_catalog_imported'").first();
-  if (imported) return { source: 'database', added: [], skipped: true };
-
-  const result = await syncBlogs(db, initialBlogsCsv);
-  await db.prepare("INSERT OR IGNORE INTO meta (key, value, updated_at) VALUES (?, ?, ?)")
-    .bind('initial_catalog_imported', '1', Math.floor(Date.now() / 1000)).run();
-  return { ...result, source: 'bundled-once', skipped: false };
-}
-
 async function crawl(env, { all = false, limit = FEEDS_PER_RUN, deadline, favicons, onProgress }) {
   const now = Date.now();
-  const { added, ...syncResult } = await ensureInitialCatalog(env.DB);
-  const sync = { ...syncResult, added: added.length };
   const feeds = await crawlFeeds(env.DB, { all, limit, deadline }, now, onProgress);
   const icons = await crawlFavicons(env.DB, favicons, now, onProgress);
   const snapshot = await buildSnapshot(env.DB, now, { stars: await repoStars(env) });
-  // After the snapshot: the blog pages are rendered from it, so the links in the message work
-  await announceNewBlogs(env, added);
-  const result = { all, sync, feeds, icons, snapshot, seconds: Math.round((Date.now() - now) / 1000) };
+  const result = { all, feeds, icons, snapshot, seconds: Math.round((Date.now() - now) / 1000) };
   console.log(JSON.stringify(result));
   return result;
 }
@@ -614,9 +598,10 @@ async function crawl(env, { all = false, limit = FEEDS_PER_RUN, deadline, favico
 // Cloudflare drops a request that sends nothing for ~100 seconds, so the
 // response streams one progress line per chunk and ends with the result.
 app.post('/api/admin/crawl', async (c) => {
-  if (!c.env.ADMIN_TOKEN || c.req.header('Authorization') !== `Bearer ${c.env.ADMIN_TOKEN}`) {
-    return c.json({ error: 'Not found' }, 404);
-  }
+  const bearer = c.env.ADMIN_TOKEN && c.req.header('Authorization') === `Bearer ${c.env.ADMIN_TOKEN}`;
+  const cookieAuth = !bearer && await hasAdminSession(c) &&
+    c.req.header('Origin') === new URL(c.req.url).origin;
+  if (!bearer && !cookieAuth) return c.json({ error: 'Not found' }, 404);
   const all = c.req.query('all') === '1';
   const limit = parseInt(c.req.query('limit') ?? '', 10) || undefined;
   const faviconsParam = c.req.query('favicons');
@@ -642,6 +627,16 @@ app.post('/api/admin/crawl', async (c) => {
   })();
   c.executionCtx.waitUntil(job);
   return new Response(readable, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
+});
+
+// Refresh the public directory after a schema migration or source retirement.
+// Keep separate from the crawler: no RSS requests or remote sources are fetched.
+app.post('/api/admin/snapshot', async (c) => {
+  const bearer = c.env.ADMIN_TOKEN && c.req.header('Authorization') === `Bearer ${c.env.ADMIN_TOKEN}`;
+  const cookieAuth = !bearer && await hasAdminSession(c) &&
+    c.req.header('Origin') === new URL(c.req.url).origin;
+  if (!bearer && !cookieAuth) return c.json({ error: 'Not found' }, 404);
+  return c.json(await buildSnapshot(c.env.DB));
 });
 
 // Post the weekly top list now (same as the Monday cron)

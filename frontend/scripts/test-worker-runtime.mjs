@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const frontend = fileURLToPath(new URL('../', import.meta.url));
 const wrangler = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js', import.meta.url));
 const origin = 'http://127.0.0.1:18787';
-const token = 'ci-local-test-token';
+const token = 'ci-local-admin-token-0123456789abcdef0123456789';
 const child = spawn(process.execPath, [wrangler, 'dev', '--local', '--port', '18787'], {
   cwd: frontend,
   env: { ...process.env, CI: 'true' },
@@ -59,9 +59,12 @@ try {
     'root displays latest articles already in D1');
   assert.match(homepageHtml, /<nav class="tabs" aria-label="主导航">/,
     'blog/forum/news navigation stays in the header');
-  assert.match(homepageHtml, /href="\/c\/sg-blogs"/);
-  assert.match(homepageHtml, /href="\/c\/sg-forum"/);
-  assert.match(homepageHtml, /href="\/c\/sg-news"/);
+  assert.match(homepageHtml, /href="\/discussions"/);
+  assert.match(homepageHtml, /href="\/following"/);
+  assert.match(homepageHtml, /https:\/\/indi\.blog\//);
+  assert.doesNotMatch(homepageHtml, /href="\/c\/sg-blogs"/);
+  assert.doesNotMatch(homepageHtml, /href="\/c\/sg-forum"/);
+  assert.doesNotMatch(homepageHtml, /href="\/c\/sg-news"/);
   assert.doesNotMatch(homepageHtml, /<h2>分类<\/h2>/,
     'sidebar category module has been removed');
   const legacyLatest = await get('/latest', { redirect: 'manual' });
@@ -69,14 +72,49 @@ try {
   assert.equal(legacyLatest.headers.get('location'), '/', '/latest points to homepage');
   assert.equal((await get('/hot')).status, 200, 'legacy hot ranking remains available');
   assert.equal((await get('/blogs')).status, 200, 'source directory must render');
-  assert.equal((await get('/c/sg-blogs')).status, 200, 'initial blog category must render');
+  assert.equal((await get('/c/sg-blogs')).status, 404, 'retired blog category is gone');
+  assert.equal((await get('/c/sg-feeds')).status, 200, 'default RSS source category still resolves');
 
   const unauthorized = await api('GET', '/api/admin/feedspace/groups', null, false);
   assert.equal(unauthorized.status, 404, 'admin API must not be publicly accessible');
 
   const groups = await api('GET', '/api/admin/feedspace/groups');
   assert.equal(groups.status, 200);
-  assert.ok(groups.data.groups.some((g) => g.id === 'blogs'));
+  assert.ok(groups.data.groups.some((g) => g.id === 'feeds'));
+  assert.ok(!groups.data.groups.some((g) => g.id === 'blogs'));
+
+  const anon = await get('/admin', { redirect: 'manual' });
+  assert.equal(anon.status, 302, 'admin requires an authenticated session');
+  assert.equal(anon.headers.get('location'), '/admin/login');
+  assert.equal((await get('/admin/login')).status, 200);
+  const wrong = await get('/admin/login', { method: 'POST',
+    body: new URLSearchParams({ password: 'a'.repeat(40) }),
+    headers: { Origin: origin } });
+  assert.equal(wrong.status, 401);
+  const login = await get('/admin/login', { method: 'POST',
+    body: new URLSearchParams({ password: token }),
+    headers: { Origin: origin }, redirect: 'manual' });
+  assert.equal(login.status, 303);
+  const setCookie = login.headers.get('set-cookie') || '';
+  assert.match(setCookie, /digg_admin=/);
+  assert.match(setCookie, /HttpOnly/i);
+  assert.match(setCookie, /SameSite=Strict/i);
+  const cookie = setCookie.split(';')[0];
+  const dashboard = await get('/admin', { headers: { Cookie: cookie } });
+  assert.equal(dashboard.status, 200);
+  const dashboardHTML = await dashboard.text();
+  assert.match(dashboardHTML, /订阅源管理/);
+  assert.doesNotMatch(dashboardHTML, /ci-local-admin-token-0123456789abcdef0123456789/);
+  const readByCookie = await get('/api/admin/feedspace/groups', { headers: { Cookie: cookie } });
+  assert.equal(readByCookie.status, 200, 'browser session can read management API');
+  const crossSite = await get('/api/admin/feedspace/groups', { method: 'POST',
+    headers: { Cookie: cookie, 'Content-Type': 'application/json', Origin: 'https://attacker.example.com' },
+    body: JSON.stringify({ id: 'crosssite', name: '攻击' }) });
+  assert.equal(crossSite.status, 404, 'cross-origin cookie writes are blocked');
+  const missingOrigin = await get('/api/admin/feedspace/groups', { method: 'POST',
+    headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: 'noorigin', name: '无来源' }) });
+  assert.equal(missingOrigin.status, 404, 'cookie mutations without Origin are blocked');
 
   const createGroup = await api('POST', '/api/admin/feedspace/groups', {
     id: 'forum', name: '论坛社区',

@@ -6,7 +6,7 @@ import { CATEGORIES } from './categories.js';
 
 export const SITE_NAME = 'DiggSpace';
 // What Indi is, for titles and descriptions that need the Chinese keywords
-export const SITE_TAGLINE = '博客、论坛与资讯聚合';
+export const SITE_TAGLINE = '独立 RSS 资讯与社区内容聚合';
 const TZ = 'Asia/Shanghai';
 const DAY = 86400;
 
@@ -120,9 +120,6 @@ function breadcrumbs(site, items) {
 
 const NAV = [
   ['latest', '/', '最新'],
-  ['sg-blogs', '/c/sg-blogs', '博客'],
-  ['sg-forum', '/c/sg-forum', '论坛'],
-  ['sg-news', '/c/sg-news', '资讯'],
   ['discussions', '/discussions', '讨论'],
   ['following', '/following', '我的关注'],
 ];
@@ -187,9 +184,9 @@ ${jsonLd.map(jsonLdScript)}
     <main>${body}</main>
     <aside class="side">
       ${stats ? html`<p class="stats"><a href="/blogs">收录 <b>${stats.blogs.toLocaleString('en-US')}</b> 个来源</a><br>本周 <b>${stats.weekBlogs}</b> 个来源更新<br>24 小时内 <b>${stats.dayPosts}</b> 篇</p>` : ''}
-      <p class="side-links"><a href="/random" rel="nofollow">随机逛一个网站 →</a></p>
+      <p class="side-links"><a href="https://indi.blog/" target="_blank" rel="noopener noreferrer">Indi · 中文独立博客 ↗</a><br><a href="/random" rel="nofollow">随机逛一个网站 →</a><br><a href="/admin" rel="nofollow">管理后台</a></p>
       ${githubBadge(stats?.stars)}
-      <div class="about">${SITE_NAME} 汇聚独立博客、论坛及资讯网站的 RSS 更新，<details class="hint"><summary>定时检查 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>订阅源由本站独立维护。</div>
+      <div class="about">${SITE_NAME} 聚合管理员精选的 RSS 订阅源，<details class="hint"><summary>定时检查 RSS。</summary><span class="hint-body">${CRAWL_DETAILS}</span></details>订阅源由本站独立维护。</div>
     </aside>
   </div>
 </div>
@@ -255,11 +252,11 @@ export function timelinePage({ site, stats, user, voted, posts, page, hasMore, c
   const pageSuffix = page > 1 ? ` · 第 ${page} 页` : '';
   const title = name ? `${name}${pageSuffix} · ${SITE_NAME}` : `最新文章${pageSuffix} · ${SITE_NAME}`;
   const description = name
-    ? `${SITE_TAGLINE}中「${name}」分类的最新文章，点击直达原博客。`
-    : `${stats?.blogs ?? 1400} 个${SITE_TAGLINE}的最新文章，点击直达原博客。`;
+    ? `${SITE_TAGLINE}中「${name}」分类的最新文章，点击直达原网站。`
+    : `${stats?.blogs ?? 1400} 个${SITE_TAGLINE}的最新文章，点击直达原网站。`;
   return layout({
     site, stats, user, title, description, path, cat: cat || '',
-    nav: cat && ['sg-blogs', 'sg-forum', 'sg-news'].includes(cat) ? cat : 'latest',
+    nav: 'latest', 
     jsonLd: name ? [breadcrumbs(site, [[SITE_NAME, '/'], [name, base]])] : page === 1
       ? [{ '@context': 'https://schema.org', '@type': 'WebSite', name: SITE_NAME,
           alternateName: SITE_TAGLINE, url: `${site}/`, description, inLanguage: 'zh-CN' }]
@@ -381,13 +378,13 @@ export function directoryPage({ site, stats, user, following, blogs, view, now }
   const [label, path] = DIRECTORY_VIEWS[view];
   return layout({
     site, stats, user, path,
-    title: view === 'all' ? `博客列表 · ${SITE_NAME}` : `博客列表：${label} · ${SITE_NAME}`,
+    title: view === 'all' ? `订阅源目录 · ${SITE_NAME}` : `订阅源目录：${label} · ${SITE_NAME}`,
     description: `${blogs.length} 个订阅源，按最近更新排序，附每月发文数量。`,
     nav: null,
     noindex: view === 'dead',
-    jsonLd: [breadcrumbs(site, [[SITE_NAME, '/'], ['博客列表', '/blogs']])],
+    jsonLd: [breadcrumbs(site, [[SITE_NAME, '/'], ['订阅源目录', '/blogs']])],
     body: html`
-      <h1 class="visually-hidden">博客列表</h1>
+      <h1 class="visually-hidden">订阅源目录</h1>
       <div class="controls">
         <input type="search" id="q" placeholder="搜索来源名、域名或标签" aria-label="搜索来源">
         <nav class="seg" aria-label="状态">
@@ -396,7 +393,7 @@ export function directoryPage({ site, stats, user, following, blogs, view, now }
       </div>
       <div class="top-cats always" id="dir-chips">
         <button data-cat="" aria-pressed="true">全部</button>
-        ${(stats?.sourceGroups ?? [{ id: 'blogs', name: '独立博客' }]).map(({ id, name }) => html`<button data-cat="sg-${id}" aria-pressed="false">${name}</button>`)}
+        ${(stats?.sourceGroups ?? [{ id: 'feeds', name: '订阅源' }]).map(({ id, name }) => html`<button data-cat="sg-${id}" aria-pressed="false">${name}</button>`)}
       </div>
       <div class="result-count" id="result-count">共 ${blogs.length} 个来源</div>
       ${view === 'dead' ? html`<p class="list-note">以下博客的 RSS 目前抓取失败，最近失败的在前。连续失败 7 天（RSS 不存在、域名失效等明确错误为 1 天）标记为疑似失效，90 天为已失效。如发现订阅地址有误，请联系本站管理员更新，下一次抓取时生效。</p>` : ''}
@@ -435,7 +432,7 @@ export function blogPage({ site, stats, user, voted, following, blocked, blog, p
         ...(blog.tags.length && { keywords: blog.tags.join(', ') }),
         blogPost: posts.slice(0, 10).map((p) => ({ '@type': 'BlogPosting', headline: p.title, url: p.url, datePublished: iso(p.published_at) })),
       },
-      breadcrumbs(site, [[SITE_NAME, '/'], ['博客列表', '/blogs'], [blog.name, base]]),
+      breadcrumbs(site, [[SITE_NAME, '/'], ['订阅源目录', '/blogs'], [blog.name, base]]),
     ],
     body: html`
       <article class="blog-page">
@@ -460,14 +457,14 @@ export function blogPage({ site, stats, user, voted, following, blocked, blog, p
         </div>
         ${refreshResult === 'done' ? html`<p class="refresh-message" role="status">RSS 已刷新，文章列表已更新。</p>` : ''}
         ${refreshResult === 'failed' ? html`<p class="refresh-message" role="status">RSS 刷新失败，请稍后再试。</p>` : ''}
-        ${refreshResult === 'no-feed' ? html`<p class="refresh-message" role="status">这个博客没有 RSS 地址，无法刷新。</p>` : ''}
+        ${refreshResult === 'no-feed' ? html`<p class="refresh-message" role="status">该来源没有 RSS 地址，无法刷新。</p>` : ''}
         ${posts.length
         ? html`<ul class="bp-posts">${posts.map((p) => html`<li>
               ${postVote(p, voted, path)}
               <a href="${safeHref(p.url)}" target="_blank" rel="noopener">${p.title || '(无标题)'}</a>
               <span class="bp-post-meta">${commentsLink(p)}<time datetime="${iso(p.published_at)}">${fDate.format(p.published_at * 1000)}</time></span>
             </li>`)}</ul>`
-        : html`<p class="empty-note">还没有收录到这个博客的文章。</p>`}
+        : html`<p class="empty-note">还没有收录到该来源的文章。</p>`}
         ${pager(base, page, hasMore)}
       </article>`,
   });
@@ -754,10 +751,10 @@ export function followingPage({ site, stats, user, voted, posts, blogCount, page
   if (!user) {
     body = html`<div class="empty"><h2>登录后关注博客</h2>关注的博主发表的文章，会按时间顺序汇总在这里。<p><a class="btn" href="/login?next=/following" rel="nofollow">登录</a></p></div>`;
   } else if (!blogCount) {
-    body = html`<div class="empty"><h2>还没有关注任何博客</h2>在<a href="/blogs">博客列表</a>或博客主页点「关注」，它们的文章会按时间顺序出现在这里。</div>`;
+    body = html`<div class="empty"><h2>还没有关注任何订阅源</h2>在<a href="/blogs">订阅源目录</a>或来源主页点「关注」，它们的文章会按时间顺序出现在这里。</div>`;
   } else {
     body = html`
-      <p class="list-note">${blogCount} 个博客（公开） · <a href="/following/blogs">管理</a> · <a href="/following.opml">导出 OPML</a></p>
+      <p class="list-note">${blogCount} 个来源（公开） · <a href="/following/blogs">管理</a> · <a href="/following.opml">导出 OPML</a></p>
       ${posts.length ? html`<ul class="items">${posts.map((p) => postItem(p, { now, voted, next: path, showDate: true }))}</ul>` : html`<p class="empty-note">关注的博客还没有文章。</p>`}
       ${pager('/following', page, hasMore)}`;
   }
@@ -803,7 +800,7 @@ export function userFollowingPage({ site, stats, user, profile, blogs, following
     description: `${profile.username} 在 ${SITE_NAME} 关注的博客。`,
     body: html`
       ${userHeader(profile, 'following', user)}
-      ${blogs.length ? html`<ul class="blogs">${blogs.map((b) => blogRow(b, now, following, path))}</ul>` : html`<p class="empty-note">还没有关注任何博客。</p>`}`,
+      ${blogs.length ? html`<ul class="blogs">${blogs.map((b) => blogRow(b, now, following, path))}</ul>` : html`<p class="empty-note">还没有关注任何订阅源。</p>`}`,
   });
 }
 
@@ -829,7 +826,7 @@ export function followingBlogsPage({ site, stats, user, blogs, following, now })
     body: html`
       <h1 class="page-title">关注的博客</h1>
       <p class="list-note"><a href="/following">← 返回文章列表</a> · <a href="/following.opml">导出 OPML</a></p>
-      ${blogs.length ? html`<ul class="blogs">${blogs.map((b) => blogRow(b, now, following, '/following/blogs'))}</ul>` : html`<p class="empty-note">还没有关注任何博客。</p>`}`,
+      ${blogs.length ? html`<ul class="blogs">${blogs.map((b) => blogRow(b, now, following, '/following/blogs'))}</ul>` : html`<p class="empty-note">还没有关注任何订阅源。</p>`}`,
   });
 }
 
@@ -849,7 +846,7 @@ export function errorPage({ site, stats, user, status, message }) {
     description: message,
     path: '/',
     noindex: true,
-    body: html`<div class="empty"><h1>${message}</h1><p>${status === 410 ? '这个博客已经从名单中移除。' : '找不到这个页面。'} <a href="/">回到首页</a></p></div>`,
+    body: html`<div class="empty"><h1>${message}</h1><p>${status === 410 ? '该来源已经从名单中移除。' : '找不到这个页面。'} <a href="/">回到首页</a></p></div>`,
   });
 }
 
@@ -862,9 +859,6 @@ export function sitemap({ site, blogs, discussed, now }) {
   const lines = [
     url('/', now),
     url('/hot', now),
-    url('/c/sg-blogs', now),
-    url('/c/sg-forum', now),
-    url('/c/sg-news', now),
     url('/discussions', now),
     url('/blogs', now),
     ...CATEGORIES.map(([id]) => url(`/c/${id}`, now)),

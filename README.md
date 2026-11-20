@@ -1,85 +1,55 @@
 # DiggSpace
 
-**DiggSpace** 是一个独立运营的 RSS / Atom 内容聚合站：把独立博客、论坛、资讯网站和 RSSHub 订阅源统一收录，在现有的热门、最新、关注和分类界面集中阅读。
+**DiggSpace** 是独立运营的 RSS / Atom 内容聚合站，位于 [digg.space](https://digg.space)。保持 Indi 原版的简洁版式与「最新 / 讨论 / 我的关注」三个导航，但**不收录或自动同步 Indi 的博客目录**。
 
-代码沿用 MIT 许可的 Indi 原有布局和基础功能，但**不依赖原作者的在线服务、域名、数据库、OAuth 应用、Telegram 群或自动同步任务**。
+原始 1,609 个博客订阅已退役，历史记录因关注、评论等关联而保留在数据库中，**不再抓取、展示或计入来源总数**；博客相关内容可前往原站：[Indi · 中文独立博客](https://indi.blog/)。
 
-## 核心特性
+## 管理员后台
 
-- 现有页面样式、布局和基本交互延续原项目；顶级分类改为动态来源类目。
-- 保留完整的初始独立博客目录（`data/initial-blogs.csv`），**只在首次初始化数据库时导入一次**；以后不再下载或覆盖原作者的名单。
-- 后续所有网站都可以通过管理 API / CLI 新增、编辑、禁用、重新归类，包括最初导入的博客。
-- 接受可访问的 RSS / Atom 和 RSSHub 生成的订阅地址。
-- Cloudflare Worker + D1 + Hono，复用定时抓取、去重、关注、评论和账号系统。
-- 不调用原作者 `indi.blog` 或原仓库的 API，不运行上游 README / OPML 自动改写脚本。
+**管理地址：[https://digg.space/admin](https://digg.space/admin)**。
 
-## 仓库结构
+管理员在 `/admin/login` 输入已配置在 Cloudflare Worker 中的 `ADMIN_TOKEN`（对应 GitHub Repository Secret：`DIGGSPACE_ADMIN_TOKEN`），登录后可直接：
 
-| 位置 | 作用 |
-| --- | --- |
-| `data/initial-blogs.csv` | 只用于首次导入的独立博客目录快照 |
-| `frontend/worker/` | RSS 抓取、页面渲染、身份验证、后台 API |
-| `frontend/migrations/` | 独立 D1 数据库结构及升级迁移 |
-| `frontend/public/` | 保留原版的 CSS、原生 JS 与图标 |
-| `scripts/feedspace_admin.py` | 类目与来源管理 CLI（无需第三方 Python 包） |
-| `FEEDSPACE.md` | 完整操作说明和 API |
+- 添加 RSS、Atom、RSSHub 订阅源（名称、网站地址、RSS 地址、可选内容类型）。
+- 查看状态、编辑、停用、重新启用或软删除来源。
+- 手动抓取最多 5 个到期订阅源，验证文章是否出现在「最新」页面。
+- 不需编辑 GitHub 仓库或 D1 数据库，即可管理日常订阅。
 
-## 本地启动
+管理员会话使用 HttpOnly + SameSite=Strict 的签名 Cookie，8 小时失效，后台修改接口有同源校验。不要将管理员密钥发给其他人或提交进代码。若忘记密钥，可重新设置 GitHub Secret `DIGGSPACE_ADMIN_TOKEN`，然后手动重新部署，它会覆盖 Worker 的 `ADMIN_TOKEN`。
 
-需要 Node.js 22+ 和 Python 3（后者仅供管理员 CLI 与数据库测试使用）。
+## 项目结构
+
+| 位置 | 用途 |
+|---|---|
+| `frontend/worker/index.js` | Hono 入口、SSR 路由、RSS 抓取 |
+| `frontend/worker/admin-panel.js` | 管理员登录及后台页面 |
+| `frontend/worker/feedspace-admin.js` | RSS 来源管理 API |
+| `frontend/public/admin.js` 和 `admin.css` | 后台管理界面 |
+| `frontend/migrations/0012_retire_indi_catalog.sql` | 停用原始 CSV 目录，保留历史关联 |
+| `frontend/public/style.css`、`app.js` | 延续原版 Indi 的公开 UI |
+| `scripts/feedspace_admin.py` | 可选的命令行管理工具 |
+
+## 部署
+
+已使用独立的 Cloudflare Worker、D1 和 digg.space 自定义域名。登录 GitHub 仓库 [Actions](https://github.com/tenglei87/diggspace/actions/workflows/deploy_diggspace.yml)，手动运行 **Deploy DiggSpace to digg.space (manual)**，选择 `master` 并输入 `BIND_DIGG_SPACE`。部署会自动运行数据库迁移、更新 Worker 和刷新前台来源快照。
+
+三个 GitHub Secrets：`CLOUDFLARE_ACCOUNT_ID`、`CLOUDFLARE_API_TOKEN`、`DIGGSPACE_ADMIN_TOKEN`；无需将其发送到聊天。预设 RSS Cron 仍处于关闭状态，避免在不确定 Cloudflare 额度时自动执行过多请求。需要通过管理后台手动抓取，后续可按套餐配置定时调度。
+
+## 本地开发
+
+安装 Node.js 22+：
 
 ```bash
 cd frontend
 npm ci
-printf 'ADMIN_TOKEN=local-dev-token\nCACHE_TTL=0\nEMAIL_DEV_LOG=1\nGITHUB_CLIENT_ID=\n' > .dev.vars
+printf 'ADMIN_TOKEN=ci-local-admin-token-0123456789abcdef0123456789\nCACHE_TTL=0\nEMAIL_DEV_LOG=1\n' > .dev.vars
 npm run db:migrate
 npm run dev:seed
 npm run dev
 ```
 
-访问 `http://localhost:8787`。首次调用定时抓取或管理抓取接口时，站点会从仓库内置的初始目录导入独立博客；之后不会自动重导入。
+在浏览器访问 `http://localhost:8787/admin`。旧 RSS CSV 已从仓库删除，不会在开发或生产再次初始化。
 
-```bash
-# 在项目根目录
-export FEEDSPACE_URL=http://localhost:8787
-export FEEDSPACE_ADMIN_TOKEN=local-dev-token
-python3 scripts/feedspace_admin.py add-group forum '论坛社区'
-python3 scripts/feedspace_admin.py add-group news '资讯网站'
-python3 scripts/feedspace_admin.py add-source --name V2EX --url https://www.v2ex.com/ --feed https://www.v2ex.com/index.xml --group forum
-```
+## 版权
 
-## 部署结构
-
-DiggSpace 使用**自己的 Cloudflare Worker + D1 + digg.space Custom Domain**，独立于原作者网站。推荐通过下方手动 GitHub Actions 工作流发布；它不会在代码推送时自动部署。
-
-仓库中仍保留无效 D1 占位 ID，防止误用其他账号资源。上线初期默认关闭 Cron 和未配置的邮件登录。需要大规模 RSS 抓取前，请确认 Cloudflare 套餐额度。
-
-## 使用 digg.space 自定义域名部署
-
-**主站地址：https://digg.space**。域名托管在用户自己的 Cloudflare 账号，GitHub Actions 只在手动触发后为 `diggspace` 创建/复用独立 D1 并发布 Cloudflare Worker，`SITE_URL` 与规范化链接均固定指向该域名。预览版不再作为发布目标。
-
-### GitHub Secrets
-
-GitHub → Settings → Secrets and variables → Actions → Repository secrets：
-
-| 名称 | 值 |
-| --- | --- |
-| `CLOUDFLARE_ACCOUNT_ID` | 持有 digg.space 的 Cloudflare Account ID |
-| `CLOUDFLARE_API_TOKEN` | 你自己的 Cloudflare API Token，不要粘贴到聊天里 |
-| `DIGGSPACE_ADMIN_TOKEN` | 至少 32 字符随机令牌，用于管理员 API |
-
-首次创建 Worker 和 D1 以及绑定域名时，Token 至少需要目标账号内 **Workers 产品 Admin、D1 Admin** 权限，另加 **Zone → Workers Routes → Write**，作用域仅选择 **digg.space** Zone。域名必须处于活动状态。无需授予全部 Zone 的 DNS Edit 权限。
-
-在 GitHub [Actions](https://github.com/tenglei87/diggspace/actions) → **Deploy DiggSpace to digg.space (manual)** → Run workflow，选择 `master`，填写确认短语 `BIND_DIGG_SPACE`。
-
-工作流将检查 Secrets、创建或重用账户内的 `diggspace` D1、执行迁移、设置 `digg.space` Custom Domain、写入 `ADMIN_TOKEN`，最后验证 `https://digg.space` 的首页和受保护的管理 API。
-
-Cloudflare 通常会为 Custom Domain 创建 DNS 和证书。如果根域名已有冲突 CNAME / 路由，需要先在 Cloudflare 控制台评估并处理，**不要直接删除其他业务 DNS**。本脚本不会主动删除 DNS。
-
-为保护首次上线资源，自动 RSS Cron、未配置的邮箱登录和不适用于免费计划的抓取额度参数仍暂时禁用。首次上线后需要有意识地启动少量 RSS 抓取才会显示文章。
-
-详细说明见 [FEEDSPACE.md](./FEEDSPACE.md)。
-
-## 开源许可与版权
-
-这是一个独立维护的衍生项目，不是从零重写。原始软件采用 MIT License（© 2019 Tim Qian）。按许可要求，保留根目录的 [LICENSE](./LICENSE) 和相应版权声明；代码与运行服务已经分离，版权归属不会被抹除。
+本项目在 MIT 许可下继续使用原始 Indi 项目的部分代码，保留 [LICENSE](./LICENSE) 中的原始作者署名与许可证。原站与本项目为独立运营，右侧提供外部跳转。
