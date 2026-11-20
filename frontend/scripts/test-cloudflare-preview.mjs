@@ -15,6 +15,12 @@ for(let i=0;i<6;i++){
 assert.equal(response?.status,200,'homepage responds');
 const html=await response.text();
 assert.match(html,/<nav class="tabs" aria-label="主导航">/);
+let previous=-1;
+for(const name of ['最新','热搜','资讯','软件','技术','奇趣','财富','英文']){
+ const position=html.indexOf('>'+name+'</a>',html.indexOf('<nav class="tabs"'));
+ assert.ok(position>previous,'production nav order incorrect: '+name);
+ previous=position;
+}
 for(const [cat,label] of [['hot','热搜'],['news','资讯'],['software','软件'],
  ['fun','奇趣'],['money','财富'],['english','英文'],['tech','技术']]){
  assert.match(html,new RegExp('href="/c/'+cat+'"[^>]*>'+label+'</a>'));
