@@ -55,6 +55,7 @@ for(const [cat,label] of [['hot','热搜'],['news','资讯'],['software','软件
 assert.match(html,/订阅 <strong>78<\/strong> 个来源/);
 assert.match(html, /<a href="https:\/\/aihot\.news\/" target="_blank" rel="noopener noreferrer">AI新闻资讯<\/a>/);
 assert.doesNotMatch(html, /<div class="section-head">/, 'latest must show articles directly');
+assert.doesNotMatch(html, /<p class="about">|上次成功抓取/, 'right sidebar must not show legacy helper text');
 // Article titles and summaries can legitimately contain words such as 讨论,
 // 登录 or AI资讯. Check the actual site header, never the editorial content.
 const header=html.match(/<header class="top">([\s\S]*?)<\/header>/)?.[1] || '';
