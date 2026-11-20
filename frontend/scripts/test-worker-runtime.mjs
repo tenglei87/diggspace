@@ -133,6 +133,28 @@ try {
     groupId: 'forum',
   });
   assert.equal(source.status, 201, JSON.stringify(source.data));
+  assert.ok(Number.isInteger(source.data.num), 'new source returns a stable number');
+
+  // Add a second source via POST. The first must retain its name/URL/feed
+  // rather than being silently reused as the new source.
+  const secondSource = await api('POST', '/api/admin/feedspace/sources', {
+    name: '第二条独立订阅源',
+    url: 'https://design.example.com/',
+    feed: 'https://design.example.com/feed.xml',
+    groupId: 'feeds',
+  });
+  assert.equal(secondSource.status, 201, JSON.stringify(secondSource.data));
+  assert.ok(Number.isInteger(secondSource.data.num));
+  assert.notEqual(secondSource.data.num, source.data.num);
+  assert.notEqual(secondSource.data.id, source.data.id);
+  const preserved = await api('GET', '/api/admin/feedspace/sources?limit=100');
+  assert.equal(preserved.status, 200);
+  const firstRow = preserved.data.sources.find(row => row.num === source.data.num);
+  const secondRow = preserved.data.sources.find(row => row.num === secondSource.data.num);
+  assert.equal(firstRow?.name, '本地接口测试订阅源');
+  assert.equal(firstRow?.feed, 'https://forum.example.com/rss.xml');
+  assert.equal(secondRow?.name, '第二条独立订阅源');
+  assert.equal(secondRow?.feed, 'https://design.example.com/feed.xml');
 
   assert.equal((await get('/c/sg-forum')).status, 200, 'custom group must render');
 
@@ -140,6 +162,7 @@ try {
   assert.equal(sources.status, 200, JSON.stringify(sources.data));
   assert.equal(sources.data.sources.length, 1);
   const num = sources.data.sources[0].num;
+  assert.equal(num, source.data.num, 'first source identity unchanged after second add');
 
   const renamed = await api('PATCH', '/api/admin/feedspace/sources/' + num, {
     name: '已编辑的测试订阅源',

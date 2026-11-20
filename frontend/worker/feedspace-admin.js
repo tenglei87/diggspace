@@ -182,25 +182,41 @@ export function registerFeedspaceAdminRoutes(app, buildSnapshot) {
       return c.json({ error: 'RSS feed already exists' }, 409);
     }
     const now = Math.floor(Date.now() / 1000);
+    // This endpoint is INSERT-only. It must never turn an "add" action into
+    // UPDATE or REPLACE, even if the admin UI was previously editing a source.
     await db.prepare(
       'INSERT INTO blogs (id, num, name, url, feed, tags, categories, position, source_group, source_origin, removed, next_check_at) ' +
       "VALUES (?, (SELECT COALESCE(MAX(num), 0) + 1 FROM blogs), ?, ?, ?, ?, ?, " +
       "(SELECT COALESCE(MAX(position), 0) + 1 FROM blogs), ?, 'manual', ?, ?)")
       .bind(id, data.name, data.url, data.feed, data.tags ?? '[]', data.categories ?? '[]',
         data.source_group, data.removed ?? 0, now).run();
+    // Give the client a stable proof of which NEW row was created.
+    const created = await db.prepare('SELECT num, id FROM blogs WHERE id = ?').bind(id).first();
+    if (!created?.num) throw Error('Created source could not be verified');
     await refresh(c);
-    return c.json({ created: true, id, sourceGroup: data.source_group }, 201);
+    return c.json({ created: true, id, num: created.num, sourceGroup: data.source_group }, 201);
   });
 
   app.patch(BASE + '/sources/:num', async (c) => {
     const no = await authorized(c); if (no) return no;
     const num = Number(c.req.param('num'));
     if (!Number.isSafeInteger(num) || num < 1) return invalid(c, 'Invalid source number');
-    const data = sourceChanges(await jsonBody(c), true);
+    const body = await jsonBody(c);
+    const data = sourceChanges(body, true);
     if (!data || !Object.keys(data).length) return invalid(c, 'Invalid changes');
     const db = c.env.DB;
     const source = await db.prepare("SELECT id, feed FROM blogs WHERE num = ?").bind(num).first();
     if (!source) return c.json({ error: 'Source not found' }, 404);
+    // Optimistic identity check avoids editing a different row if the browser
+    // has stale table state. Legacy CLI clients may omit expectedId.
+    if (body.expectedId != null && body.expectedId !== source.id) {
+      return c.json({ error: 'Source changed since the form was opened; reload before editing' }, 409);
+    }
+    // Replacing a feed URL can silently destroy the user's previous subscription.
+    // Require an explicit, deliberate edit acknowledgment for this operation.
+    if (data.feed && data.feed !== source.feed && body.allowFeedReplacement !== true) {
+      return c.json({ error: 'Changing a feed requires explicit confirmation. Use Add for a new source.' }, 409);
+    }
     if (data.source_group && !await db.prepare('SELECT 1 FROM source_groups WHERE id = ?').bind(data.source_group).first()) {
       return invalid(c, 'Unknown groupId');
     }

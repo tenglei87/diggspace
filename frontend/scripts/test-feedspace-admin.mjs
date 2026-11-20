@@ -74,6 +74,10 @@ class FakeD1 {
       const row = this.sources.get(args[0]);
       return row ? { id: row.id, feed: row.feed } : null;
     }
+    if (sql.startsWith('SELECT num, id FROM blogs WHERE id = ?')) {
+      const row = [...this.sources.values()].find(row => row.id === args[0]);
+      return row ? { num: row.num, id: row.id } : null;
+    }
     if (sql.startsWith('INSERT INTO blogs (id, num')) {
       const num = this.nextNum++;
       this.sources.set(num, {
@@ -128,7 +132,9 @@ assert.equal((await call('PATCH', '/groups/forum', { name: '独立论坛' })).st
 assert.equal(db.groups.get('forum').name, '独立论坛');
 
 const feed = { name: '论坛', url: 'https://forum.example.com/', feed: 'https://forum.example.com/index.xml', groupId: 'forum' };
-assert.equal((await call('POST', '/sources', feed)).status, 201);
+const firstAdd = await call('POST', '/sources', feed);
+assert.equal(firstAdd.status, 201);
+assert.equal(firstAdd.body.num, 2, 'create response provides unique new source number');
 assert.equal((await call('POST', '/sources', feed)).status, 409);
 assert.equal((await call('POST', '/sources', { ...feed, feed: 'http://127.0.0.1/rss' })).status, 400);
 assert.equal((await call('POST', '/sources', { ...feed, feed: 'https://forum.example/rss' })).status, 400,
@@ -136,6 +142,35 @@ assert.equal((await call('POST', '/sources', { ...feed, feed: 'https://forum.exa
 assert.equal((await call('POST', '/sources', { ...feed, feed: 'https://forum.example.com/other.xml' })).status, 201,
   'same website can have multiple distinct RSSHub feeds');
 assert.equal((await call('GET', '/sources')).body.sources.length, 3);
+
+// Regression: successive Add operations must always create separate rows.
+// The pre-existing source (num 2) may never be rewritten by the next Add.
+const previous = { ...db.sources.get(2) };
+const third = await call('POST', '/sources', {
+  name: '另一个网站的 RSS',
+  url: 'https://design.example.com/',
+  feed: 'https://design.example.com/feed.xml',
+  groupId: 'feeds',
+});
+assert.equal(third.status, 201);
+assert.equal(third.body.num, 4);
+assert.equal(db.sources.get(2).id, previous.id);
+assert.equal(db.sources.get(2).feed, previous.feed);
+assert.equal(db.sources.get(2).name, previous.name);
+assert.equal((await call('GET', '/sources')).body.sources.length, 4);
+assert.equal(new Set((await call('GET', '/sources')).body.sources.map(x => x.num)).size, 4);
+
+// Regression: changing the RSS URL is EDIT, never a covert Add. Require an
+// explicit acknowledgement; stale row identities must refuse the mutation.
+assert.equal((await call('PATCH', '/sources/2', {
+  feed: 'https://forum.example.com/accidental-replace.xml',
+  expectedId: previous.id,
+})).status, 409, 'silent feed replacement must be forbidden');
+assert.equal(db.sources.get(2).feed, previous.feed);
+assert.equal((await call('PATCH', '/sources/2', {
+  name: 'Wrong row', expectedId: 'manual-not-this-source',
+})).status, 409, 'stale edit must not modify another source');
+assert.equal(db.sources.get(2).name, previous.name);
 
 assert.equal((await call('PATCH', '/sources/1', { groupId: 'forum', name: '旧博客已接管' })).status, 200);
 assert.equal(db.sources.get(1).source_origin, 'manual',
@@ -152,4 +187,4 @@ assert.equal((await call('DELETE', '/groups/feeds')).status, 400,
   'default RSS group must not be removed');
 assert.ok(snapshots >= 6, 'successful mutations must refresh public snapshot');
 
-console.log('PASS: protected RSS API, default feeds, retired-source exclusion, duplicate detection and enable/disable');
+console.log('PASS: successive independent source additions, stable source numbers, edit safeguards, protected RSS API and disabled/enabled sources');
