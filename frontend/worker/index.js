@@ -93,7 +93,7 @@ async function renderTimeline(c, category = '') {
   const title = labelFor(category);
   // The selected tab already identifies the category. Avoid duplicate
   // titles/subtitles and start the news list immediately below the navigation.
-  const content = html`<section class="stream news-stream">
+  const content = html`<section class="stream">
     ${data.items.length ? html`<ol class="items">${data.items.map(item => html`<li class="item">
       <span class="av" aria-hidden="true">${Array.from(item.source_name)[0] || '·'}</span>
       <div class="item-main">
