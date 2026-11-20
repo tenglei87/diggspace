@@ -108,6 +108,21 @@ export async function crawlNews(db, {
   return { checked: due.length, attempted: itemsAttempted, statuses };
 }
 
+// On a brand-new deployment, gently populate the first few feeds without
+// waiting for the first hourly cron. A D1 lease prevents visitor stampedes.
+export async function warmStart(db, ctx, now = Math.floor(Date.now() / 1000)) {
+  const existing = await db.prepare('SELECT 1 FROM news_items LIMIT 1').first();
+  if (existing) return false;
+  await db.prepare("INSERT OR IGNORE INTO news_meta (key,value,updated_at) VALUES ('warmup_lock','0',0)").run();
+  const lease = await db.prepare(
+    "UPDATE news_meta SET value=?,updated_at=? WHERE key='warmup_lock' AND CAST(value AS INTEGER) <= ?"
+  ).bind(String(now + 900), now, now).run();
+  if (!lease.meta?.changes) return false;
+  ctx.waitUntil(crawlNews(db, { now, limit: 4 }).catch(e =>
+    console.warn('Initial RSS warm-up skipped:', e.message)));
+  return true;
+}
+
 export async function latestNews(db, category, page, pageSize = 50) {
   const offset = (page - 1) * pageSize;
   const { results } = await db.prepare(`SELECT i.title, i.url, i.summary,
