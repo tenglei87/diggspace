@@ -3,8 +3,8 @@
   "private": true,
   "description": "DiggSpace — an independent RSS/Atom feed aggregator, derived from MIT-licensed Indi.",
   "scripts": {
-    "lint": "node scripts/lint.mjs",
-    "test": "python3 scripts/test_feedspace_schema.py && node scripts/test_independence.mjs"
+    "lint": "node --check scripts/lib/feed.mjs && node --check frontend/worker/index.js && node --check frontend/worker/news.js && node --check frontend/worker/catalog.js && node scripts/test_independence.mjs",
+    "test": "python3 scripts/test_feedspace_schema.py && node scripts/test_independence.mjs && node frontend/scripts/test-news.mjs"
   },
   "engines": {
     "node": ">=20"
