@@ -2,12 +2,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { prepareCustomDomainConfig } from './prepare-cloudflare-deployment.mjs';
-import { resolveDiggspaceD1 } from './resolve-cloudflare-d1.mjs';
+import { resolveDiggspaceD1, requireExistingDiggspaceD1 } from './resolve-cloudflare-d1.mjs';
 
 const original = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
 const UUID = '11111111-2222-3333-4444-555555555555';
 
 assert.equal(resolveDiggspaceD1([]), null);
+assert.throws(() => requireExistingDiggspaceD1([]), /Existing diggspace D1 not found/);
+assert.equal(requireExistingDiggspaceD1([{ name: 'diggspace', uuid: UUID }]), UUID);
 assert.equal(resolveDiggspaceD1([{ name: 'other', uuid: UUID }]), null);
 assert.equal(resolveDiggspaceD1([{ name: 'diggspace', uuid: UUID }]), UUID);
 assert.equal(resolveDiggspaceD1([{ name: 'diggspace', id: UUID }]), UUID);
