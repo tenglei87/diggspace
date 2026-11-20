@@ -12,7 +12,7 @@ SELECT
   0,
   'ok',
   COALESCE(MAX(num), 0) + 1,
-  'blogs',
+  'feeds',
   'manual'
 FROM blogs
 WHERE 1
