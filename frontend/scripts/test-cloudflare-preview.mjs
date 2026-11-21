@@ -8,7 +8,7 @@ const get=(path,opts={})=>fetch(site+path,{
 // Cloudflare may serve the previous Worker version's cached homepage for
 // up to 30 seconds. Each attempt gets a unique cache key and checks the
 // actual expected navigation before considering rollout successful.
-const expectedNav=['最新','热搜','资讯','软件','技术','奇趣','财富','英文'];
+const expectedNav=['最新','热搜','资讯','软件','技术','奇趣','财富'];
 const correctNav=html=>{
   const navStart=html.indexOf('<nav class="tabs" aria-label="主导航">');
   if(navStart<0)return false;
@@ -37,13 +37,13 @@ assert.equal(response?.status,200,'homepage responds');
 assert.ok(correctNav(html),'updated navigation did not propagate after cache-bypassed retries');
 assert.match(html,/<nav class="tabs" aria-label="主导航">/);
 let previous=-1;
-for(const name of ['最新','热搜','资讯','软件','技术','奇趣','财富','英文']){
+for(const name of ['最新','热搜','资讯','软件','技术','奇趣','财富']){
  const position=html.indexOf('>'+name+'</a>',html.indexOf('<nav class="tabs"'));
  assert.ok(position>previous,'production nav order incorrect: '+name);
  previous=position;
 }
 for(const [cat,label] of [['hot','热搜'],['news','资讯'],['software','软件'],['tech','技术'],
- ['fun','奇趣'],['money','财富'],['english','英文']]){
+ ['fun','奇趣'],['money','财富']]){
  assert.match(html,new RegExp('href="/c/'+cat+'"[^>]*>'+label+'</a>'));
  // Existing category pages may briefly be served from Cloudflare's former
  // Worker or cached SSR output after a deployment. Check the actual new
@@ -73,7 +73,7 @@ for(const [cat,label] of [['hot','热搜'],['news','资讯'],['software','软件
  assert.match(categoryHTML, /href="https:\/\/aihot\.news\/"[^>]*>AI新闻资讯<\/a>/);
  assert.doesNotMatch(categoryHTML, /<p class="about">|上次成功抓取/);
 }
-assert.match(html,/订阅 <strong>78<\/strong> 个来源/);
+assert.match(html,/订阅 <strong>68<\/strong> 个来源/);
 assert.match(html, /<a href="https:\/\/aihot\.news\/" target="_blank" rel="noopener noreferrer">AI新闻资讯<\/a>/);
 assert.doesNotMatch(html, /<div class="section-head">/, 'latest must show articles directly');
 assert.doesNotMatch(html, /<p class="about">|上次成功抓取/, 'right sidebar must not show legacy helper text');
@@ -84,8 +84,13 @@ assert.ok(header,'top navigation header exists');
 for(const phrase of ['登录','讨论','我的关注','管理后台','AI资讯'])
  assert.doesNotMatch(header,new RegExp(phrase),'retired top navigation: '+phrase);
 assert.equal((await get('/sources')).status,200);
+assert.equal((await get('/c/english?verify=retired-english-'+Date.now())).status,404);
+const sourcesHTML=await (await get('/sources?verify=retired-english-'+Date.now())).text();
+assert.doesNotMatch(sourcesHTML, /href="\/c\/english"/);
+if(html.includes('class="item"'))
+ assert.match(html, /class="source-icon"[\s\S]*?\/favicon\.ico"/, 'article favicon displayed');
 for(const path of ['/admin','/admin/login','/login','/discussions','/following',
  '/api/admin/feedspace/sources','/api/admin/crawl','/ai-hot','/ai-daily','/ai-weekly']){
  const r=await get(path);assert.equal(r.status,404,'retired endpoint: '+path);
 }
-console.log('PASS: production RSS reader, 78 sources, eight tabs, legacy admin and community routes removed');
+console.log('PASS: production RSS reader, 68 sources, seven tabs, legacy admin and community routes removed');
