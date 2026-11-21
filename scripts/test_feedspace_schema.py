@@ -7,7 +7,7 @@ root = Path(__file__).resolve().parent.parent
 db = sqlite3.connect(":memory:")
 db.execute("PRAGMA foreign_keys = ON")
 migrations = sorted((root / "frontend" / "migrations").glob("*.sql"))
-assert migrations and migrations[-1].name == "0016_drop_retired_legacy.sql", migrations[-1].name
+assert migrations and migrations[-1].name == "0017_remove_english_sources.sql", migrations[-1].name
 
 for file in migrations:
     if file.name == "0011_feedspace_sources.sql":
@@ -60,6 +60,14 @@ for file in migrations:
         db.execute("INSERT INTO news_meta (key,value,updated_at) VALUES ('catalog_version','preserved',1800000000)")
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
 
+    if file.name == "0017_remove_english_sources.sql":
+        db.execute("""INSERT INTO news_sources (id,category,name,site_url,feed_url)
+                      VALUES ('old-english','english','Old English RSS',
+                      'https://old.example.org','https://old.example.org/rss')""")
+        db.execute("""INSERT INTO news_items (source_id,url,title,published_at,first_seen_at)
+                      VALUES ('old-english','https://old.example.org/post','Retired article',
+                      1800000000,1800000000)""")
+
     db.executescript(file.read_text(encoding="utf-8"))
 
 # Account, community and previous Indi content tables must be gone.
@@ -77,4 +85,4 @@ assert db.execute("SELECT COUNT(*) FROM news_items").fetchone()[0] == 1
 assert db.execute("SELECT title FROM news_items").fetchone()[0] == 'Keep Article'
 assert db.execute("SELECT value FROM news_meta WHERE key='catalog_version'").fetchone()[0] == 'preserved'
 assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-print("PASS: 16 migrations; 15 retired tables dropped; all independent news tables and rows preserved")
+print("PASS: 17 migrations; 15 retired tables dropped; all independent news tables and rows preserved")

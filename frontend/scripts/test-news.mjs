@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { CATEGORIES, FEEDS, CATALOG_VERSION } from '../worker/catalog.js';
 import { parseFeed, fetchFeed } from '../../scripts/lib/feed.mjs';
-assert.deepEqual(CATEGORIES.map(c => c.name), ['热搜','资讯','软件','技术','奇趣','财富','英文']);
-assert.equal(FEEDS.length, 78, 'curated source count');
+assert.deepEqual(CATEGORIES.map(c => c.name), ['热搜','资讯','软件','技术','奇趣','财富']);
+assert.equal(FEEDS.length, 68, 'curated source count');
+assert.ok(!FEEDS.some(s=>s.category==='english'), 'English category retired');
 assert.equal(new Set(FEEDS.map(s=>s.id)).size, FEEDS.length, 'unique source IDs');
 assert.equal(new Set(FEEDS.map(s=>s.feed)).size, FEEDS.length, 'unique URLs');
 assert.ok(FEEDS.every(s=>CATEGORIES.some(c=>c.id===s.category)));
@@ -84,4 +85,4 @@ try {
 } finally {
   globalThis.fetch = originalFetch;
 }
-console.log('PASS: 78 curated RSS feeds, XML hardening, safe redirect limits and conditional headers');
+console.log('PASS: 68 curated RSS feeds, XML hardening, safe redirect limits and conditional headers');

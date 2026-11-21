@@ -9,7 +9,6 @@ export const CATEGORIES = Object.freeze([
   { id: "tech", name: "技术" },
   { id: "fun", name: "奇趣" },
   { id: "money", name: "财富" },
-  { id: "english", name: "英文" },
 ]);
 export const FEEDS = Object.freeze([
   { id: "r-20c43f0b", category: "hot", name: "知乎热榜", site: "https://plink.anyfeeder.com", feed: "https://plink.anyfeeder.com/zhihu/hotlist" },
@@ -69,9 +68,6 @@ export const FEEDS = Object.freeze([
   { id: "r-794206d9", category: "money", name: "新财富", site: "https://plink.anyfeeder.com", feed: "https://plink.anyfeeder.com/weixin/newfortune" },
   { id: "r-f5833584", category: "money", name: "新经济100人", site: "https://plink.anyfeeder.com", feed: "https://plink.anyfeeder.com/weixin/qiyejiagc" },
   { id: "r-354a714b", category: "money", name: "雪球", site: "https://plink.anyfeeder.com", feed: "https://plink.anyfeeder.com/weixin/xueqiujinghua" },
-  { id: "r-6c57c7d9", category: "english", name: "CSS-Tricks", site: "https://css-tricks.com", feed: "https://css-tricks.com/feed/" },
-  { id: "r-3a602918", category: "english", name: "Julia Evans", site: "https://jvns.ca", feed: "https://jvns.ca/atom.xml" },
-  { id: "r-22b706bc", category: "english", name: "Dan Abramov's Overreacted Blog RSS Feed", site: "https://overreacted.io", feed: "https://overreacted.io/rss.xml" },
   { id: "r-79aa13df", category: "tech", name: "美团技术团队", site: "https://tech.meituan.com", feed: "https://tech.meituan.com/feed" },
   { id: "r-c5fd5d90", category: "tech", name: "V2EX", site: "https://v2ex.com", feed: "https://v2ex.com/index.xml" },
   { id: "r-0299210a", category: "tech", name: "奇客Solidot–传递最新科技情报", site: "https://www.solidot.org", feed: "https://www.solidot.org/index.rss" },
@@ -83,13 +79,6 @@ export const FEEDS = Object.freeze([
   { id: "r-b975a3a5", category: "tech", name: "技术小黑屋", site: "https://droidyue.com", feed: "https://droidyue.com/atom.xml" },
   { id: "r-3e944677", category: "tech", name: "极客公园", site: "https://plink.anyfeeder.com", feed: "https://plink.anyfeeder.com/geekpark" },
   { id: "r-a89dca93", category: "tech", name: "掘金专栏-字节跳动技术团队", site: "https://rsshub.app", feed: "https://rsshub.app/juejin/posts/1838039172387262" },
-  { id: "r-3a31580b", category: "english", name: "HBR IdeaCast", site: "https://feeds.harvardbusiness.org", feed: "https://feeds.harvardbusiness.org/harvardbusiness/ideacast" },
-  { id: "r-fa383e0c", category: "english", name: "EconTalk", site: "https://feeds.simplecast.com", feed: "https://feeds.simplecast.com/wgl4xEgL" },
-  { id: "r-a4151676", category: "english", name: "TED Business", site: "https://feeds.feedburner.com", feed: "https://feeds.feedburner.com/TEDBusiness" },
-  { id: "r-aea12111", category: "english", name: "Slate Money", site: "https://feeds.megaphone.fm", feed: "https://feeds.megaphone.fm/slate-money" },
-  { id: "r-5f2009c6", category: "english", name: "Money Talks from The Economist", site: "https://feeds.acast.com", feed: "https://feeds.acast.com/public/shows/637e33dd7c20e40011ad684e" },
-  { id: "r-a4a12dcb", category: "english", name: "TED Radio Hour", site: "https://feeds.npr.org", feed: "https://feeds.npr.org/510298/podcast.xml" },
-  { id: "r-5f16d0ef", category: "english", name: "Masters in Business", site: "https://feeds.bloomberg.fm", feed: "https://feeds.bloomberg.fm/BLM2009837476" },
 ]);
 // Update this fingerprint whenever the catalog changes.
-export const CATALOG_VERSION = "2026-11-20-1fa1caee";
+export const CATALOG_VERSION = "2026-11-21-no-english";

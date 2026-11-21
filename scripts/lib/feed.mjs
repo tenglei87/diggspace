@@ -175,7 +175,7 @@ function classifyError(err) {
 // External feeds are fixed in the checked-in catalog, but redirects may still
 // be untrusted. Reject raw IPs, private-looking hosts and URL credentials.
 const MAX_REDIRECTS = 4;
-function safeFeedUrl(raw) {
+export function safeFeedUrl(raw) {
   try {
     const url = new URL(raw);
     const hostname = url.hostname.toLowerCase().replace(/\.$/, '');

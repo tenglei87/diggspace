@@ -3,6 +3,7 @@
 import { Hono } from 'hono';
 import { html } from 'hono/html';
 import { CATEGORIES } from './catalog.js';
+import { safeFeedUrl } from '../../scripts/lib/feed.mjs';
 import { crawlNews, latestNews, listSources, sourceStats, syncCatalog, warmStart } from './news.js';
 
 const app = new Hono();
@@ -18,6 +19,11 @@ const shortTime = new Intl.DateTimeFormat('zh-CN', {
 const validHttp = raw => {
   try { const u = new URL(raw); return ['https:', 'http:'].includes(u.protocol) ? u.href : '#'; }
   catch { return '#'; }
+};
+// Display publisher favicons, not the RSS aggregator's logo.
+const sourceIcon = (articleUrl, sourceSite) => {
+  const safe = safeFeedUrl(articleUrl) || safeFeedUrl(sourceSite);
+  return safe ? 'https://' + new URL(safe).hostname + '/favicon.ico' : '/favicon.svg';
 };
 const siteUrl = c => c.env.SITE_URL || new URL(c.req.url).origin;
 const pageNumber = c => {
@@ -35,12 +41,12 @@ app.use('*', async (c, next) => {
   if (new URL(c.req.url).protocol === 'https:')
     c.header('Strict-Transport-Security', 'max-age=31536000');
   c.header('Content-Security-Policy',
-    "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+    "default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self' https: data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
 });
 
 function shell({ title, category = '', base, content, stats, canonical = '/' }) {
   const fullTitle = title === '最新' ? 'DiggSpace · RSS 新闻聚合' : title + ' · DiggSpace';
-  const description = '精选 RSS 新闻：热搜、资讯、软件、技术、奇趣、财富、英文，按时间聚合，直接阅读原文。';
+  const description = '精选 RSS 新闻：热搜、资讯、软件、技术、奇趣、财富，按时间聚合，直接阅读原文。';
   return html`<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -95,7 +101,9 @@ async function renderTimeline(c, category = '') {
   // titles/subtitles and start the news list immediately below the navigation.
   const content = html`<section class="stream news-stream">
     ${data.items.length ? html`<ol class="items">${data.items.map(item => html`<li class="item">
-      <span class="av" aria-hidden="true">${Array.from(item.source_name)[0] || '·'}</span>
+      <span class="av" aria-hidden="true"><img class="source-icon"
+        src="${sourceIcon(item.url, item.source_site)}" alt="" width="20" height="20"
+        loading="lazy" decoding="async" referrerpolicy="no-referrer"></span>
       <div class="item-main">
         <a class="item-title" href="${validHttp(item.url)}"
            rel="noopener noreferrer" target="_blank">${item.title}</a>

@@ -2,10 +2,10 @@
 
 这是一个 **read-only RSS reader**，没有账号、管理员、评论、关注、投票或外部 RSS 增删改 API。
 
-- `worker/catalog.js`：代码中维护 78 个来源及七大分类；
+- `worker/catalog.js`：代码中维护 68 个来源及六个分类；
 - `worker/news.js`：首次访问同步来源目录；每小时由 Cron 执行 RSS 抓取，一次最多 24 个到期源；
-- `worker/index.js`：Hono SSR，`/` 汇总全部、`/c/{category}` 分类、`/sources` 来源列表；
-- `migrations/0015_readonly_news.sql`：独立的 news_sources / news_items / news_meta 三张新闻表；`0016_drop_retired_legacy.sql`：删除 15 张废弃旧表。
+- `worker/index.js`：使用文章原站 favicon 的 Hono SSR，`/` 汇总全部、`/c/{category}` 分类、`/sources` 来源列表；
+- `migrations/0015_readonly_news.sql`：独立的 news_sources / news_items / news_meta 三张新闻表；`0016_drop_retired_legacy.sql`：删除 15 张废弃旧表；`0017_remove_english_sources.sql`：删除英文订阅源及其文章。
 
 本地启动：
 ```bash

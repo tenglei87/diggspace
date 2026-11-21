@@ -79,6 +79,6 @@ jobs:
         run: |
           echo "## DiggSpace RSS newspaper deployed" >> "$GITHUB_STEP_SUMMARY"
           echo "Domain: https://digg.space" >> "$GITHUB_STEP_SUMMARY"
-          echo "78 sources in code; hourly RSS cron is enabled" >> "$GITHUB_STEP_SUMMARY"
+          echo "68 sources in code; hourly RSS cron is enabled" >> "$GITHUB_STEP_SUMMARY"
           echo "Login, discussions, following and administrator pages are removed" >> "$GITHUB_STEP_SUMMARY"
           echo "The first hourly crawl will populate new articles; feeds may fail independently" >> "$GITHUB_STEP_SUMMARY"

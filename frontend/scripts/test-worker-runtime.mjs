@@ -32,13 +32,17 @@ try{
  assert.equal((await get('/?page=1e2')).status,404,'reject scientific-notation pagination');
  assert.equal((await get('/?page=01')).status,404,'reject noncanonical pagination');
  assert.equal((await get('/page/%0A1',{redirect:'manual'})).status,404,'reject unsafe redirect path');
- assert.match(html,/订阅 <strong>78<\/strong> 个来源/);
+ assert.match(html,/订阅 <strong>68<\/strong> 个来源/);
  assert.match(html,/<nav class="tabs" aria-label="主导航">/);
+ assert.match(html, /class="source-icon"[\s\S]*?src="https:\/\/example\.com\/favicon\.ico"/, 'site favicon instead of cover image');
+ assert.match(html, /referrerpolicy="no-referrer"/, 'icon requests do not send a referrer');
+ assert.match((await get('/')).headers.get('content-security-policy') || '', /img-src 'self' https: data:/);
+ assert.doesNotMatch(html.match(/<nav class="tabs"[\s\S]*?<\/nav>/)?.[0] || '', />英文<\/a>/);
  // AIHOT is an external recommendation, not an internal feed category.
  assert.match(html, /<a href="https:\/\/aihot\.news\/" target="_blank" rel="noopener noreferrer">AI新闻资讯<\/a>/);
  assert.doesNotMatch(html, /<div class="section-head">/, 'latest timeline must not repeat its title');
  assert.doesNotMatch(html, /<p class="about">|上次成功抓取/, 'right sidebar has no helper text or last fetch');
- const navOrder=['最新','热搜','资讯','软件','技术','奇趣','财富','英文'];
+ const navOrder=['最新','热搜','资讯','软件','技术','奇趣','财富'];
  let previous=-1;
  for(const name of navOrder){
    const position=html.indexOf('>'+name+'</a>',html.indexOf('<nav class="tabs"'));
@@ -61,7 +65,7 @@ try{
  assert.match(newsHtml,/本地资讯测试文章/);
  assert.doesNotMatch(newsHtml,/本地热搜测试文章/);
  assert.doesNotMatch(newsHtml, /<div class="section-head">/);
- for(const category of ['software','tech','fun','money','english']){
+ for(const category of ['software','tech','fun','money']){
    const pageHtml=await (await get('/c/'+category)).text();
    assert.doesNotMatch(pageHtml, /<div class="section-head">/, 'repeated heading on '+category);
    assert.match(pageHtml, /href="https:\/\/aihot\.news\/"[^>]*>AI新闻资讯<\/a>/);
@@ -72,8 +76,9 @@ try{
     '/api/admin/feedspace/sources','/vote','/follow','/ai-hot','/ai-daily','/ai-weekly'])
    assert.equal((await get(path,{redirect:'manual'})).status,404,'removed route '+path);
  assert.equal((await get('/c/nonexistent')).status,404);
+ assert.equal((await get('/c/english')).status,404,'retired English category');
  assert.equal((await get('/sitemap.xml')).status,200);
  assert.equal((await get('/latest',{redirect:'manual'})).status,301);
- console.log('PASS: read-only Worker/D1, 78 feeds, all categories and no account/admin routes');
+ console.log('PASS: read-only Worker/D1, 68 feeds, all categories and no account/admin routes');
 }catch(err){console.error(err);console.error('WRANGLER LOGS:\n'+logs);process.exitCode=1}
 finally{if(!exited)child.kill('SIGTERM')}

@@ -126,7 +126,7 @@ export async function warmStart(db, ctx, now = Math.floor(Date.now() / 1000)) {
 export async function latestNews(db, category, page, pageSize = 50) {
   const offset = (page - 1) * pageSize;
   const { results } = await db.prepare(`SELECT i.title, i.url, i.published_at,
-     s.name AS source_name, s.category FROM news_items i
+     s.name AS source_name, s.category, s.site_url AS source_site FROM news_items i
      JOIN news_sources s ON s.id = i.source_id
      WHERE s.enabled = 1 AND (? = '' OR s.category = ?)
      ORDER BY i.published_at DESC, i.rowid DESC
